@@ -4,12 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>護法會雲端系統 - 提報名單資料組操作</title>
+<!-- SheetJS：供「下載OO清單」按鈕把畫面資料匯出成 .xlsx 使用（2026-09-20 新增） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v1.5（2026-09-20）
+   * 版本：v1.6（2026-09-20）
    * 版本歷程：
+   *   - v1.6（2026-09-20，法師建議）：卡片二／三／四各新增「下載
+   *     OO清單」按鈕，點擊後重新查詢最新資料（不依賴畫面是否已
+   *     按過「顯示」），欄位跟畫面表格一致，透過 SheetJS（CDN 載入
+   *     的 xlsx.full.min.js）在瀏覽器端直接轉成 .xlsx 並觸發下載，
+   *     不需要另外連到 Google Sheet 開啟核對。純前端新增功能，
+   *     後端 API 與核心業務邏輯完全未變動。
    *   - v1.5（2026-09-20，法師建議）：檢核／產出動作完成後不再
    *     自動顯示明細表格（卡片二「檢核提報資料」→候選清單、卡片三
    *     「檢核聘書數」→待複核清單、卡片四「產出核定名單」→核定
@@ -217,6 +225,7 @@
     <div class="step-row">
       <button class="action" id="btnCheckReportData" onclick="處理檢核提報資料按鈕點擊()">① 檢核提報資料</button>
       <button class="action secondary" id="btnRefreshCandidateList" onclick="載入候選清單()">顯示候選清單</button>
+      <button class="action secondary" id="btnDownloadCandidateList" onclick="處理下載候選清單按鈕點擊()">下載候選清單</button>
     </div>
     <div class="msg" id="msgMatch"></div>
 
@@ -233,6 +242,7 @@
     <div class="step-row">
       <button class="action" id="btnSummarizeOverLimit" onclick="處理彙總職務數與超額標色按鈕點擊()">① 檢核聘書數</button>
       <button class="action secondary" id="btnRefreshReviewList" onclick="載入待複核清單()">顯示待複核清單</button>
+      <button class="action secondary" id="btnDownloadReviewList" onclick="處理下載待複核清單按鈕點擊()">下載待複核清單</button>
     </div>
     <div class="msg" id="msgSummarize"></div>
 
@@ -252,6 +262,7 @@
     <div class="step-row">
       <button class="action" id="btnGenerateApprovedList" onclick="處理套用決議並產出核定名單按鈕點擊()">① 產出核定名單</button>
       <button class="action secondary" id="btnRefreshApprovedList" onclick="載入核定名單()">顯示核定名單</button>
+      <button class="action secondary" id="btnDownloadApprovedList" onclick="處理下載核定名單按鈕點擊()">下載核定名單</button>
     </div>
     <div class="msg" id="msgApprovedList"></div>
 
@@ -303,6 +314,51 @@ function 轉義HTML(str原始文字) {
  */
 function 轉義單引號(str原始文字) {
   return String(str原始文字).replace(/'/g, "\\'");
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：下載清單為Excel
+ * 版本：v1.0（2026-09-20，法師建議新增，供候選清單／待複核清單／
+ *       核定名單三個「下載」按鈕共用）
+ * 用途：把畫面上的清單資料（跟畫面表格看到的欄位一致）匯出成
+ *       .xlsx 檔案並觸發瀏覽器下載，不需要另外連到 Google Sheet
+ *       開啟核對。用 SheetJS（xlsx.full.min.js，透過 CDN 載入）
+ *       在瀏覽器端直接產生檔案，後端完全不用改動。
+ * 參數：
+ *   arr資料        - 陣列，每個元素是一筆資料的物件（API 回傳的原始物件）
+ *   arr欄位設定    - 陣列，每個元素 { 鍵值: str, 標題: str }，決定匯出
+ *                    的欄位順序與 Excel 欄位標題（跟畫面表格欄位一致，
+ *                    不外露候選項目ID／來源列ID等系統內部技術欄位）
+ *   str檔名        - 下載的檔案名稱（不含副檔名，會自動加上 .xlsx）
+ *   str找不到資料提示 - arr資料 為空時，顯示的提示文字
+ * 回傳：無（直接觸發瀏覽器下載，或用 window.alert 提示沒有資料）
+ * ------------------------------------------------------------
+ */
+function 下載清單為Excel(arr資料, arr欄位設定, str檔名, str找不到資料提示) {
+  if (!arr資料 || arr資料.length === 0) {
+    window.alert(str找不到資料提示 || "目前沒有資料可以下載，請先確認清單內容。");
+    return;
+  }
+  if (typeof XLSX === "undefined") {
+    window.alert("匯出 Excel 的元件載入失敗，請確認網路連線正常後重新整理頁面再試一次。");
+    return;
+  }
+
+  var arrExcel資料 = arr資料.map(function (obj一筆) {
+    var obj一列 = {};
+    arr欄位設定.forEach(function (obj欄位) {
+      obj一列[obj欄位.標題] = obj一筆[obj欄位.鍵值];
+    });
+    return obj一列;
+  });
+
+  var 工作表 = XLSX.utils.json_to_sheet(arrExcel資料, {
+    header: arr欄位設定.map(function (obj欄位) { return obj欄位.標題; })
+  });
+  var 活頁簿 = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(活頁簿, 工作表, "清單");
+  XLSX.writeFile(活頁簿, str檔名 + ".xlsx");
 }
 
 /**
@@ -507,6 +563,45 @@ async function 載入候選清單() {
   }
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：處理下載候選清單按鈕點擊
+ * 版本：v1.0（2026-09-20，法師建議新增）
+ * 用途：重新呼叫「查詢候選清單」取得目前最新資料（不依賴畫面上
+ *       是否已經按過「顯示候選清單」），欄位跟畫面表格一致，
+ *       用 下載清單為Excel 匯出成 .xlsx。
+ * ------------------------------------------------------------
+ */
+async function 處理下載候選清單按鈕點擊() {
+  const btn = document.getElementById("btnDownloadCandidateList");
+  btn.disabled = true;
+  try {
+    const objResult = await 呼叫提報API("查詢候選清單");
+    if (!objResult.成功) {
+      window.alert(objResult.訊息 || "查詢候選清單失敗，請稍後再試。");
+      return;
+    }
+    下載清單為Excel(
+      objResult.候選清單,
+      [
+        { 鍵值: "來源分頁", 標題: "來源分頁" },
+        { 鍵值: "來源列號", 標題: "來源列號" },
+        { 鍵值: "組長填寫姓名", 標題: "組長填寫姓名" },
+        { 鍵值: "候選學員編號", 標題: "候選學員編號" },
+        { 鍵值: "候選法名", 標題: "候選法名" },
+        { 鍵值: "候選性別", 標題: "候選性別" }
+      ],
+      "候選清單",
+      "目前沒有需要人工核對的候選項目，不需要下載。"
+    );
+  } catch (錯誤) {
+    console.error("下載候選清單時發生未預期錯誤：", 錯誤);
+    window.alert("下載時發生未預期錯誤，請稍後再試或聯絡工程人員。");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 /** 版本 v1.0：資料組核對候選清單某一筆後，確認回填學員編號 */
 async function 處理回填候選學員編號按鈕點擊(str來源分頁, int來源列號, strInputId) {
   const str學員編號 = document.getElementById(strInputId).value.trim();
@@ -619,6 +714,47 @@ async function 載入待複核清單() {
   } catch (錯誤) {
     console.error("載入待複核清單時發生錯誤：", 錯誤);
     elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理下載待複核清單按鈕點擊
+ * 版本：v1.0（2026-09-20，法師建議新增）
+ * 用途：重新呼叫「查詢待複核清單」取得目前最新資料，欄位跟畫面
+ *       表格一致（不含候選項目ID／來源分頁等系統內部技術欄位），
+ *       用 下載清單為Excel 匯出成 .xlsx。
+ * ------------------------------------------------------------
+ */
+async function 處理下載待複核清單按鈕點擊() {
+  const btn = document.getElementById("btnDownloadReviewList");
+  btn.disabled = true;
+  try {
+    const objResult = await 呼叫提報API("查詢待複核清單");
+    if (!objResult.成功) {
+      window.alert(objResult.訊息 || "查詢待複核清單失敗，請稍後再試。");
+      return;
+    }
+    下載清單為Excel(
+      objResult.待複核清單,
+      [
+        { 鍵值: "學員編號", 標題: "學員編號" },
+        { 鍵值: "姓名", 標題: "姓名" },
+        { 鍵值: "法名", 標題: "法名" },
+        { 鍵值: "聘書總數（該人）", 標題: "聘書總數（該人）" },
+        { 鍵值: "組別", 標題: "組別" },
+        { 鍵值: "職稱", 標題: "職稱" },
+        { 鍵值: "法師會議決議", 標題: "法師會議決議" },
+        { 鍵值: "取消原因", 標題: "取消原因" }
+      ],
+      "待複核清單",
+      "目前沒有超額待複核的項目，不需要下載。"
+    );
+  } catch (錯誤) {
+    console.error("下載待複核清單時發生未預期錯誤：", 錯誤);
+    window.alert("下載時發生未預期錯誤，請稍後再試或聯絡工程人員。");
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -751,6 +887,44 @@ async function 載入核定名單() {
   } catch (錯誤) {
     console.error("載入核定名單時發生錯誤：", 錯誤);
     elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理下載核定名單按鈕點擊
+ * 版本：v1.0（2026-09-20，法師建議新增）
+ * 用途：重新呼叫「查詢核定名單」取得目前最新資料，欄位跟畫面
+ *       表格一致，用 下載清單為Excel 匯出成 .xlsx。
+ * ------------------------------------------------------------
+ */
+async function 處理下載核定名單按鈕點擊() {
+  const btn = document.getElementById("btnDownloadApprovedList");
+  btn.disabled = true;
+  try {
+    const objResult = await 呼叫提報API("查詢核定名單");
+    if (!objResult.成功) {
+      window.alert(objResult.訊息 || "查詢核定名單失敗，請稍後再試。");
+      return;
+    }
+    下載清單為Excel(
+      objResult.核定名單,
+      [
+        { 鍵值: "學員編號", 標題: "學員編號" },
+        { 鍵值: "姓名", 標題: "姓名" },
+        { 鍵值: "法名", 標題: "法名" },
+        { 鍵值: "性別", 標題: "性別" },
+        { 鍵值: "組別", 標題: "組別" },
+        { 鍵值: "職稱", 標題: "職稱" }
+      ],
+      "核定名單",
+      "目前尚未產出核定名單，不需要下載。"
+    );
+  } catch (錯誤) {
+    console.error("下載核定名單時發生未預期錯誤：", 錯誤);
+    window.alert("下載時發生未預期錯誤，請稍後再試或聯絡工程人員。");
+  } finally {
+    btn.disabled = false;
   }
 }
 
