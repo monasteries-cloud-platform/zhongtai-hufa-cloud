@@ -10,8 +10,12 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v1.6（2026-09-20）
+   * 版本：v1.7（2026-09-20）
    * 版本歷程：
+   *   - v1.7（2026-09-20，法師建議）：卡片三「送出決議」按鈕文字前
+   *     加上編號「②」，跟同卡片「① 檢核聘書數」的編號方式一致，
+   *     讓「先檢核、再送出決議」的操作順序更清楚。純文字調整，
+   *     onclick 呼叫的函式與後端 API 完全未變動。
    *   - v1.6（2026-09-20，法師建議）：卡片二／三／四各新增「下載
    *     OO清單」按鈕，點擊後重新查詢最新資料（不依賴畫面是否已
    *     按過「顯示」），欄位跟畫面表格一致，透過 SheetJS（CDN 載入
@@ -250,7 +254,7 @@
       <div class="empty-hint">尚未載入待複核清單。</div>
     </div>
     <div class="step-row" style="margin-top:10px;">
-      <button class="action" id="btnSubmitDecisions" onclick="處理送出決議按鈕點擊()">送出決議</button>
+      <button class="action" id="btnSubmitDecisions" onclick="處理送出決議按鈕點擊()">② 送出決議</button>
     </div>
     <div class="msg" id="msgReviewList"></div>
   </div>
