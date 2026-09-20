@@ -4,15 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>護法會雲端系統 - 報到場次管理</title>
+<!-- SheetJS：供「下載名單」按鈕把某場次出席名單匯出成 .xlsx 使用（2026-09-20 新增） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   /*
    * ============================================================
    * 檔案：報到系統場次管理頁面
-   * 版本：v1.0（2026-09-16）
+   * 版本：v1.1（2026-09-20）
+   * 版本歷程：
+   *   v1.1（2026-09-20，法師建議：所有清單／名單都要能下載）：
+   *     場次清單每一列新增「下載名單」按鈕，點擊後呼叫新增的
+   *     「查詢場次出席名單」API，把該場次完整出席名單（含報到
+   *     狀態）用 SheetJS 匯出成 .xlsx，不需要另外連到 Google
+   *     Sheet 開啟核對。純前端新增功能，後端只新增查詢用的
+   *     唯讀 API，不影響既有的建立場次／刪除場次邏輯。
+   *   v1.0（2026-09-16）初版。
    * 說明：
    *   精舍登入後（沿用「精舍後台管理」同一套登入狀態）的報到
-   *   場次管理頁面，提供三項功能：建立場次（貼上出席名單）、
-   *   查看場次清單與報到進度、刪除場次。
+   *   場次管理頁面，提供四項功能：建立場次（貼上出席名單）、
+   *   查看場次清單與報到進度、下載場次出席名單、刪除場次。
    *   進入本頁前會先檢查 sessionStorage 是否有登入資訊，沒有就
    *   導回登入頁面（跟 temple-admin.html 邏輯一致）。
    * ============================================================
@@ -161,6 +171,16 @@
     cursor: pointer;
   }
   .btn-delete:hover { background: #8a2a21; }
+  .btn-download {
+    background: #2E5395;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .btn-download:hover { background: #1f3c6e; }
   .empty-hint {
     color: #999;
     font-size: 13px;
@@ -400,6 +420,7 @@ function 組出場次清單表格HTML(arr場次清單) {
     "</tr></thead><tbody>";
 
   arr場次清單.forEach(function (obj場次) {
+    // 避免總人數為0時除以0，先做防呆判斷
     var int百分比 = obj場次.總人數 > 0
       ? Math.round((obj場次.已報到人數 / obj場次.總人數) * 100)
       : 0;
@@ -412,7 +433,11 @@ function 組出場次清單表格HTML(arr場次清單) {
         obj場次.已報到人數 + " / " + obj場次.總人數 + "（" + int百分比 + "%）" +
         "<div class='progress-bar-bg'><div class='progress-bar-fill' style='width:" + int百分比 + "%'></div></div>" +
       "</td>" +
-      "<td><button class='btn-delete' onclick=\"處理刪除場次按鈕點擊('" + 轉義單引號(obj場次.場次代碼) + "')\">刪除</button></td>" +
+      "<td>" +
+        "<button class='btn-download' onclick=\"處理下載出席名單按鈕點擊('" +
+          轉義單引號(obj場次.場次代碼) + "', '" + 轉義單引號(obj場次.場次名稱) + "')\">下載名單</button> " +
+        "<button class='btn-delete' onclick=\"處理刪除場次按鈕點擊('" + 轉義單引號(obj場次.場次代碼) + "')\">刪除</button>" +
+      "</td>" +
       "</tr>";
   });
 
@@ -453,6 +478,107 @@ function 轉義HTML(str原始文字) {
  */
 function 轉義單引號(str原始文字) {
   return String(str原始文字).replace(/'/g, "\\'");
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：下載清單為Excel
+ * 版本：v1.0（2026-09-20，法師建議新增）
+ * 用途：把資料陣列匯出成 .xlsx 檔案並觸發瀏覽器下載。用 SheetJS
+ *       （xlsx.full.min.js，透過 CDN 載入）在瀏覽器端直接產生
+ *       檔案，後端完全不用改動。跟 report-admin.html 的同名函式
+ *       邏輯一致，因為兩個頁面是各自獨立的靜態頁面，沒有共用
+ *       JS 檔案的機制，故各自保留一份。
+ * 參數：
+ *   arr資料        - 陣列，每個元素是一筆資料的物件（API 回傳的原始物件）
+ *   arr欄位設定    - 陣列，每個元素 { 鍵值: str, 標題: str }，決定匯出
+ *                    的欄位順序與 Excel 欄位標題
+ *   str檔名        - 下載的檔案名稱（不含副檔名，會自動加上 .xlsx）
+ *   str找不到資料提示 - arr資料 為空時，顯示的提示文字
+ * 回傳：無（直接觸發瀏覽器下載，或用 window.alert 提示沒有資料）
+ * ------------------------------------------------------------
+ */
+function 下載清單為Excel(arr資料, arr欄位設定, str檔名, str找不到資料提示) {
+  if (!arr資料 || arr資料.length === 0) {
+    window.alert(str找不到資料提示 || "目前沒有資料可以下載，請先確認名單內容。");
+    return;
+  }
+  if (typeof XLSX === "undefined") {
+    window.alert("匯出 Excel 的元件載入失敗，請確認網路連線正常後重新整理頁面再試一次。");
+    return;
+  }
+
+  var arrExcel資料 = arr資料.map(function (obj一筆) {
+    var obj一列 = {};
+    arr欄位設定.forEach(function (obj欄位) {
+      obj一列[obj欄位.標題] = obj一筆[obj欄位.鍵值];
+    });
+    return obj一列;
+  });
+
+  var 工作表 = XLSX.utils.json_to_sheet(arrExcel資料, {
+    header: arr欄位設定.map(function (obj欄位) { return obj欄位.標題; })
+  });
+  var 活頁簿 = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(活頁簿, 工作表, "出席名單");
+  XLSX.writeFile(活頁簿, str檔名 + ".xlsx");
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理下載出席名單按鈕點擊
+ * 版本：v1.0（2026-09-20，法師建議新增：所有清單／名單都要能下載）
+ * 用途：呼叫新增的「查詢場次出席名單」API，取得該場次完整出席
+ *       名單（含報到狀態），用 下載清單為Excel 匯出成 .xlsx，
+ *       檔名用「場次代碼_場次名稱」方便資料組辨識。
+ * 參數：
+ *   str場次代碼 - 要下載的場次代碼
+ *   str場次名稱 - 該場次名稱（用於組檔名，可能為空）
+ * ------------------------------------------------------------
+ */
+async function 處理下載出席名單按鈕點擊(str場次代碼, str場次名稱) {
+  const obj登入資訊 = 取得目前登入精舍資訊();
+  if (!obj登入資訊) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  try {
+    const objResult = await 呼叫後端API({
+      system: "報到",
+      action: "查詢場次出席名單",
+      token: obj登入資訊.token,
+      場次代碼: str場次代碼
+    });
+
+    if (!objResult.成功) {
+      window.alert(objResult.訊息 || "查詢出席名單失敗，請稍後再試。");
+      return;
+    }
+
+    const str檔名 = str場次代碼 + (str場次名稱 ? "_" + str場次名稱 : "") + "_出席名單";
+    下載清單為Excel(
+      objResult.出席名單,
+      [
+        { 鍵值: "序號", 標題: "序號" },
+        { 鍵值: "學員編號", 標題: "學員編號" },
+        { 鍵值: "姓名", 標題: "姓名" },
+        { 鍵值: "法名", 標題: "法名" },
+        { 鍵值: "性別", 標題: "性別" },
+        { 鍵值: "組別", 標題: "組別" },
+        { 鍵值: "職稱", 標題: "職稱" },
+        { 鍵值: "備註", 標題: "備註" },
+        { 鍵值: "注意事項", 標題: "注意事項" },
+        { 鍵值: "報到", 標題: "報到狀態" },
+        { 鍵值: "報到時間", 標題: "報到時間" }
+      ],
+      str檔名,
+      "這個場次目前沒有出席名單資料，不需要下載。"
+    );
+  } catch (錯誤) {
+    console.error("下載出席名單時發生未預期錯誤：", 錯誤);
+    window.alert("下載時發生未預期錯誤，請稍後再試或聯絡工程人員。");
+  }
 }
 
 /**
