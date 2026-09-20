@@ -3,8 +3,86 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>護法會頸證出席報到系統</title>
+<title>護法會頒證出席報到系統</title>
+<!-- 【v2.3 新增】若瀏覽器不支援原生 BarcodeDetector（例如部分 iOS Safari 版本），
+     載入 jsQR 作為掃描 QR Code 的解碼備援函式庫（沿用舊版報到系統
+     06-04-02 頒證/checkin.html 已驗證可用的掃碼方式，比照套用到新架構）。 -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <style>
+  /*
+   * ============================================================
+   * 檔案：現場報到掃碼頁（模組4）
+   * 版本：v2.3（2026-09-20，新增相機掃描 QR Code 報到功能）
+   * 說明：
+   *   給活動現場使用的報到頁面，不需要精舍登入密碼
+   *   （2026-09-16 訪談確認），精舍代碼與場次代碼由網址參數帶入，
+   *   例如：checkin.html?temple=A&session=1025
+   *   操作方式（v2.0）：輸入學員編號或姓名後按「查詢報到」（或
+   *   按 Enter），比對到「唯一」一位學員時直接完成報到，不用再
+   *   多一道人工核對／按確認鈕的手續；只有查到「同名同姓」多筆
+   *   資料時，才會列出候選清單讓操作人員點選是哪一位，選定後才
+   *   真正完成報到。畫面刻意做得夠大、按鈕夠大，方便現場用平板
+   *   或手機操作。
+   * 變更說明（v1.1）：
+   *   法師提供舊版報到系統畫面截圖，希望套用相同的視覺風格
+   *   （米色底、深咖啡色按鈕、標題靠左排版）。2026-09-16 訪談
+   *   確認：這次先只套用視覺風格，「攝影機即時掃描QR Code」功能
+   *   （舊版畫面中的相機掃描區塊）留待之後視需要再加。
+   * 變更說明（v1.2，2026-09-17 法師實機測試建議）：
+   *   法師實機測試後反映：上方「報到結果」卡片與下方「輸入查詢」
+   *   卡片若用同一種底色，操作人員不容易第一眼分辨要看哪一區的
+   *   訊息。因此把「報到結果」卡片（#cardResult）改用淡綠色系
+   *   底色與邊框，跟下方查詢卡片（#cardSearch，維持原本白底）
+   *   明顯區隔成不同色系，方便報到人員快速找到需要留意的訊息
+   *   區塊。
+   * 變更說明（v2.0，2026-09-17 訪談確認）：
+   *   法師反映兩段式確認（查詢→核對→按確認報到）多一道手續，
+   *   希望「查到就馬上報到」。因此：
+   *     - 取消原本的「待確認」卡片與「確認報到／取消」兩顆按鈕，
+   *       原本的 #cardConfirm 改為 #cardResult，只用來顯示報到
+   *       結果訊息（成功／已報到／查無此人等），不再有可互動的
+   *       核對資料與按鈕。
+   *     - 輸入欄位改成「學員編號或姓名」皆可輸入；查到「唯一」
+   *       一位學員就直接送出報到，查到「同名同姓」多筆時才在
+   *       #cardResult 內顯示候選清單（姓名＋法名）讓操作人員
+   *       點選其中一位，點選後才真正完成報到。
+   *     - 後端串接的 action 名稱不變（仍是 "確認報到"），但語意
+   *       改成「查詢並視情況立即報到」，詳見後端
+   *       「報到系統_03_現場報到邏輯.gs」的說明。
+   * 變更說明（v2.1，2026-09-17 實機測試發現並修正臭蟲）：
+   *   報到成功訊息原本只顯示「✓ 報到成功！」，看不出報到的是誰，
+   *   已在訊息中補上「姓名（法名）」，顯示於訊息與注意事項之間。
+   * 變更說明（v2.2，2026-09-17 法師實機測試建議）：
+   *   法師反映報到結果／提醒訊息（#msgResult）文字偏小，希望
+   *   加大方便年長者閱讀；下方查詢區（學員編號／姓名輸入欄、
+   *   查詢按鈕、標籤文字）則可以相應縮小，兩區形成視覺對比，
+   *   凸顯報到結果訊息才是現場人員需要看清楚的重點。調整項目：
+   *   .msg（報到結果／候選清單提示文字）14px→20px；候選清單
+   *   按鈕文字（.candidate-item）17px→20px（與結果訊息同級）；
+   *   下方查詢區：label 14px→13px、輸入框文字 20px→18px、
+   *   「查詢報到」按鈕文字 17px→15px。純CSS調整，未變動任何
+   *   互動邏輯與後端串接方式。
+   * 變更說明（v2.3，2026-09-20 法師訪談確認，新增相機掃描功能）：
+   *   舊版報到系統（06-04-02 頒證/checkin.html）原本就有用手機相機
+   *   即時掃描 QR Code 報到的功能（學員證上印的 QR Code，內容即
+   *   學員編號），2026-09-16 套用視覺風格時決議先不做，這次法師
+   *   確認要補回來。訪談確認：(1) 用手機相機直接掃，不需外接掃碼槍；
+   *   (2) 採「連續掃描」模式，相機保持開啟，掃到一位處理完自動繼續
+   *   掃下一位，適合現場排隊；(3) 完全沿用現有「查到就直接報到、
+   *   同名同姓才出候選清單」的邏輯，掃碼只是多一種輸入方式，不新增
+   *   後端 API、不改後端邏輯。
+   *   實作方式：直接沿用舊版 checkin.html 已驗證可用的掃描技術（優先
+   *   使用瀏覽器原生 BarcodeDetector，不支援時退回 jsQR 解碼函式庫；
+   *   同一組編號 3 秒內不重複觸發，避免鏡頭對著同一張證件時被連續
+   *   判讀成好幾次報到請求），掃描成功後直接呼叫既有的「送出報到()」
+   *   函式，效果等同在輸入框打好編號按 Enter，後端串接與同名同姓
+   *   候選清單機制完全不變。畫面上補回舊版的「除錯資訊」列（顯示
+   *   偵測影格數／視訊尺寸／readyState），方便現場手機無法接電腦
+   *   除錯時，也能看出鏡頭與掃描迴圈是否正常運作。原本的「輸入學員
+   *   編號或姓名」查詢框保留在相機畫面下方，作為相機故障、光線不佳
+   *   掃不到、或想用姓名查詢時的備用輸入方式。
+   * ============================================================
+   */
   :root {
     --color-bg: #F5F1E6;
     --color-card-bg: #FFFFFF;
@@ -15,6 +93,8 @@
     --color-accent-hover: #533019;
     --color-accent-disabled: #C9B9A3;
     --color-danger: #B3372C;
+    /* 【v1.2 新增】「報到結果」卡片專用淡綠色系，與下方
+       查詢卡片的白底做出區隔，方便現場人員一眼分辨訊息區塊 */
     --color-confirm-card-bg: #EEF3E7;
     --color-confirm-card-border: #C7D6B8;
     --color-confirm-profile-bg: #F7FAF3;
@@ -67,11 +147,16 @@
     padding: 22px 20px;
     margin-bottom: 18px;
   }
+  /* 【v1.2 新增】「報到結果」卡片改用淡綠色系，跟下方查詢卡片的
+     白底明顯區隔（2026-09-16 法師實機測試建議：同色系不容易找到
+     想要的訊息區塊） */
   #cardResult.card {
     background: var(--color-confirm-card-bg);
     border-color: var(--color-confirm-card-border);
   }
 
+  /* 【v2.0 新增】同名同姓候選清單樣式：每位候選人是一個可點擊的
+     選項按鈕，樣式比照 profile-box 但整塊可點擊 */
   .candidate-list { margin-top: 6px; }
   .candidate-item {
     width: 100%;
@@ -124,6 +209,9 @@
   button.big-action:disabled { background: var(--color-accent-disabled); cursor: not-allowed; }
   button.big-action:hover:not(:disabled) { background: var(--color-accent-hover); }
 
+  /* 【v1.2 調整】報到結果／提醒訊息文字加大，方便年長者閱讀
+     （2026-09-17 法師實機測試建議）；下方查詢區文字則相應縮小，
+     兩區形成視覺對比，凸顯報到結果訊息才是現場人員需要看清楚的重點 */
   .msg { margin-top: 14px; font-size: 20px; line-height: 1.5; text-align: center; min-height: 18px; white-space: pre-line; }
   .msg:first-child { margin-top: 0; }
   .msg.error { color: var(--color-danger); }
@@ -135,6 +223,39 @@
     color: var(--color-subtitle);
     padding: 40px 0;
   }
+
+  /* 【v2.3 新增】相機掃描區塊樣式，沿用舊版 checkin.html 的做法 */
+  #video {
+    width: 100%;
+    max-width: 420px;
+    height: 200px;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #000;
+    display: block;
+    margin: 0 auto;
+  }
+  .scan-tip {
+    font-size: 13px;
+    color: var(--color-subtitle);
+    text-align: center;
+    margin-top: 10px;
+  }
+  .scan-tip .warn { color: var(--color-danger); font-weight: bold; }
+  /* 除錯資訊：方便現場手機無法接電腦除錯時，也能看出鏡頭與掃描
+     迴圈是否正常運作（偵測影格數／視訊尺寸／readyState），沿用
+     舊版報到系統已驗證有用的做法 */
+  #debugInfo {
+    font-size: 12px;
+    color: #999;
+    text-align: center;
+    margin-top: 4px;
+  }
+  .manual-entry {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--color-card-border);
+  }
 </style>
 </head>
 <body>
@@ -144,21 +265,48 @@
 <div class="wrap" id="mainContent" style="display:none;">
 
   <div class="header-card">
-    <h1>護法會頸證出席報到系統</h1>
+    <h1>護法會頒證出席報到系統</h1>
     <div class="session-line">目前報到場次：<span id="sessionNameShow"></span></div>
     <div class="announcement" id="announcementShow"></div>
     <div id="endedBadge" style="display:none;" class="status-ended">本場次報到已結束</div>
   </div>
 
-  <div class="card" id="cardResult" style="display:none;">
+  <!--
+    2026-09-16 訪談確認：報到結果／候選清單要放在畫面最上端（緊接
+    在頁首下方），不要讓操作人員每次都要往下滑才看得到結果訊息，
+    所以這裡刻意把「報到結果」卡片排在「輸入查詢」卡片的前面。
+    2026-09-17 訪談確認（v2.0）：取消原本「查詢→核對→按確認報到」
+    的兩段式流程，改成查到唯一一位學員就直接完成報到；這張卡片
+    (#cardResult，原 #cardConfirm) 因此不再顯示可核對的姓名資料
+    框與確認／取消按鈕，只用來顯示：(a) 報到結果訊息（成功／已
+    報到／查無此人等），或 (b) 查到同名同姓多筆時的候選清單，供
+    操作人員點選其中一位再完成報到。
+  -->
+
+  <!-- 報到結果／同名同姓候選清單（v2.0：查到就直接報到，取消人工核對步驟；
+       v2.3：預設就顯示（不再是 display:none），閒置時顯示「請掃描 QR Code
+       進行報到」的提示，比照舊版報到系統畫面，讓操作人員一開始就知道
+       要做什麼，不用等第一次查詢後才看到這個區塊） -->
+  <div class="card" id="cardResult">
     <div class="msg" id="msgResult"></div>
     <div class="candidate-list" id="candidateList"></div>
   </div>
 
+  <!-- 【v2.3 新增】相機掃描 QR Code 報到（比照舊版報到系統
+       06-04-02 頒證/checkin.html 已驗證可用的掃描方式）；下方保留
+       「輸入學員編號或姓名」查詢框，作為相機故障或想用姓名查詢時
+       的備用輸入方式，兩者共用同一套「送出報到()」後端串接邏輯 -->
   <div class="card" id="cardSearch">
-    <label for="inputStudentId">請輸入學員編號或姓名</label>
-    <input type="text" id="inputStudentId" autocomplete="off" inputmode="text" placeholder="輸入後按 Enter 或查詢報到">
-    <button class="big-action" id="btnSearch" onclick="處理查詢按鈕點擊()">查詢報到</button>
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <div class="scan-tip" id="scanTip">請將 QR Code 對準鏡頭</div>
+    <div id="debugInfo"></div>
+
+    <div class="manual-entry">
+      <label for="inputStudentId">若無法掃描，可手動輸入學員編號或姓名</label>
+      <input type="text" id="inputStudentId" autocomplete="off" inputmode="text" placeholder="輸入後按 Enter 或送出">
+      <button class="big-action" id="btnSearch" onclick="處理查詢按鈕點擊()">送出報到</button>
+    </div>
   </div>
 
 </div>
@@ -166,18 +314,66 @@
 <script src="config.js"></script>
 <script>
 
+/** 【v2.3 新增】相機掃描 QR Code 相關的頁面狀態變數，沿用舊版
+ *  報到系統 checkin.html 已驗證可用的做法 */
+var elVideo = null;
+var elCanvas = null;
+var ctxCanvas = null;
+var bool使用原生偵測 = false;
+var objBarcodeDetector = null;
+var str上次掃描編號 = "";
+var int上次掃描時間 = 0;
+var int偵測影格數 = 0;
+var str最後錯誤 = "";
 
+/**
+ * ------------------------------------------------------------
+ * 函式：取得網址參數
+ * 版本：v1.0（2026-09-16）
+ * 用途：從目前網址的查詢字串中取出指定參數值，供讀取
+ *       ?temple=A&session=1025 這類報到頁專用的網址參數使用。
+ * 參數：
+ *   strKey - 參數名稱
+ * 回傳：str 參數值，找不到時回傳空字串
+ * ------------------------------------------------------------
+ */
 function 取得網址參數(strKey) {
   const params = new URLSearchParams(window.location.search);
   return params.get(strKey) || "";
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：顯示區塊訊息
+ * 版本：v1.0（2026-09-16）
+ * 用途：在指定的訊息區塊顯示提示、成功或錯誤訊息。
+ * 參數：
+ *   strMsgElementId - 要顯示訊息的元素 id
+ *   str訊息內容      - 顯示的文字
+ *   str樣式           - "error" / "success" / "info" 三選一
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 function 顯示區塊訊息(strMsgElementId, str訊息內容, str樣式) {
   const elMsg = document.getElementById(strMsgElementId);
   elMsg.textContent = str訊息內容;
   elMsg.className = "msg " + str樣式;
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：組合含注意事項訊息
+ * 版本：v1.0（2026-09-16）
+ * 用途：報到成功或重複報到時，若該學員在報到試算表中有填寫
+ *       「注意事項」欄位內容，將其附加在原本訊息的下一行顯示，
+ *       提醒現場工作人員留意（2026-09-16 訪談確認）；若沒有
+ *       注意事項內容，就只顯示原本的訊息。
+ * 參數：
+ *   str原始訊息 - 原本要顯示的訊息文字
+ *   str注意事項 - 注意事項欄位內容（可能是空字串或 undefined）
+ * 回傳：str 組合後的訊息文字
+ * ------------------------------------------------------------
+ */
 function 組合含注意事項訊息(str原始訊息, str注意事項) {
   if (str注意事項) {
     return str原始訊息 + "\n【注意事項】" + str注意事項;
@@ -185,10 +381,33 @@ function 組合含注意事項訊息(str原始訊息, str注意事項) {
   return str原始訊息;
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：清空候選清單
+ * 版本：v1.0（2026-09-17）
+ * 用途：每次重新查詢或完成報到前，先清空上一次顯示的同名同姓
+ *       候選清單按鈕，避免畫面殘留舊資料。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 function 清空候選清單() {
   document.getElementById("candidateList").innerHTML = "";
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：顯示候選清單
+ * 版本：v1.0（2026-09-17）
+ * 用途：查到「同名同姓」多筆資料時，把候選人一一畫成可點擊的
+ *       按鈕（顯示姓名＋法名協助辨識，2026-09-17 訪談確認），
+ *       點擊後帶著該筆「唯一」的學員編號重新呼叫「送出報到」，
+ *       這次一定會走學員編號比對、不會再出現同名同姓的情況。
+ * 參數：
+ *   arr候選清單 - 陣列，每筆為 { 學員編號, 姓名, 法名 }
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 function 顯示候選清單(arr候選清單) {
   const elList = document.getElementById("candidateList");
   elList.innerHTML = "";
@@ -199,6 +418,8 @@ function 顯示候選清單(arr候選清單) {
     elButton.className = "candidate-item";
     elButton.textContent = obj候選.姓名 + (obj候選.法名 ? "（" + obj候選.法名 + "）" : "");
     elButton.onclick = function () {
+      // 點選候選人後，把所有候選按鈕先停用，避免同時點兩個造成
+      // 重複送出報到請求
       Array.prototype.forEach.call(elList.querySelectorAll(".candidate-item"), function (el) {
         el.disabled = true;
       });
@@ -208,6 +429,35 @@ function 顯示候選清單(arr候選清單) {
   });
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：送出報到
+ * 版本：v1.1（2026-09-17，取代 v1.0 的「處理查詢按鈕點擊」＋
+ *       「處理確認報到按鈕點擊」兩段式流程）
+ * 用途：v2.0「查到就直接報到」的核心函式，呼叫後端「確認報到」
+ *       （語意已改為「查詢並視情況立即報到」，見後端說明），並依
+ *       回傳結果決定畫面呈現：
+ *         - 成功 → 顯示「✓ 報到成功！」＋報到者姓名（法名）＋
+ *           注意事項，清空輸入框準備下一位；
+ *         - 查到同名同姓多筆（類型="同名同姓待選"）→ 不算失敗，
+ *           顯示候選清單讓操作人員點選其中一位；
+ *         - 其他失敗（已報到／查無此人／場次已結束等）→ 顯示
+ *           錯誤訊息（含注意事項，若有）。
+ *       本函式同時給「輸入框查詢」與「候選清單點選」兩種情境呼叫，
+ *       差別只在傳入的 str輸入內容 來源不同。
+ *       v1.1 修正：法師實機測試發現，報到成功的訊息只顯示
+ *       「✓ 報到成功！」，完全看不出這次報到的是哪一位學員，
+ *       現場工作人員無法確認報到的人是否正確。原因是 v2.0
+ *       改寫時，把 v1.0「待確認」卡片顯示姓名資料的邏輯整段
+ *       移除了，卻忘記在報到成功訊息裡把姓名資料加回來。
+ *       修正方式：報到成功時，在訊息中加入「姓名（法名）」，
+ *       顯示在「✓ 報到成功！」之下、注意事項之上。
+ * 參數：
+ *   str輸入內容 - 學員編號或姓名（來自輸入框，或候選清單點選的
+ *                 學員編號）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 async function 送出報到(str輸入內容) {
   document.getElementById("cardResult").style.display = "block";
   清空候選清單();
@@ -226,6 +476,10 @@ async function 送出報到(str輸入內容) {
     });
 
     if (objResult.成功) {
+      // 報到成功後除了顯示注意事項欄位內容（2026-09-16 訪談確認），
+      // 也要顯示報到者的姓名（法名），讓現場工作人員能確認這次
+      // 報到的是哪一位學員（2026-09-17 實機測試發現並修正的臭蟲：
+      // v2.0 移除待確認卡片時，忘記把姓名資料一併加回報到成功訊息）
       var str基本訊息 = "✓ " + (objResult.訊息 || "報到成功！");
       var str姓名資訊 = objResult.姓名
         ? objResult.姓名 + (objResult.法名 ? "（" + objResult.法名 + "）" : "")
@@ -237,17 +491,21 @@ async function 送出報到(str輸入內容) {
         組合含注意事項訊息(str含姓名訊息, objResult.注意事項),
         "success"
       );
+      // 報到成功後清空輸入框，準備讓下一位報到
       document.getElementById("inputStudentId").value = "";
       document.getElementById("inputStudentId").focus();
       return;
     }
 
     if (objResult.類型 === "同名同姓待選") {
+      // 查到多筆同名同姓，不算錯誤，用一般提示樣式顯示，並列出候選清單
       顯示區塊訊息("msgResult", objResult.訊息, "info");
       顯示候選清單(objResult.候選清單 || []);
       return;
     }
 
+    // 其他情況一律視為失敗（已報到／查無此人／場次已結束等），
+    // 若有注意事項（例如重複報到時）一併附上（2026-09-16 訪談確認）
     顯示區塊訊息(
       "msgResult",
       組合含注意事項訊息(objResult.訊息 || "報到失敗，請洽現場工作人員協助。", objResult.注意事項),
@@ -261,6 +519,165 @@ async function 送出報到(str輸入內容) {
   }
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：啟動相機
+ * 版本：v1.0（2026-09-20，沿用舊版報到系統 checkin.html 已驗證
+ *       可用的掃描方式）
+ * 用途：開啟手機相機（優先使用瀏覽器原生 BarcodeDetector，不支援
+ *       時退回 jsQR 解碼函式庫），啟動後進入連續掃描迴圈；若相機
+ *       開啟失敗（例如使用者拒絕授權相機權限），在畫面上顯示警示
+ *       文字，提醒改用下方手動輸入，不會擋住整個頁面。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 啟動相機() {
+  elVideo = document.getElementById("video");
+  elCanvas = document.getElementById("canvas");
+  ctxCanvas = elCanvas.getContext("2d", { willReadFrequently: true });
+
+  if ("BarcodeDetector" in window) {
+    bool使用原生偵測 = true;
+    objBarcodeDetector = new BarcodeDetector({ formats: ["qr_code"] });
+  }
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+    .then(function (stream) {
+      elVideo.srcObject = stream;
+      elVideo.setAttribute("playsinline", true);
+      elVideo.play();
+      requestAnimationFrame(掃描迴圈);
+      顯示掃描引擎狀態();
+      啟動除錯資訊更新();
+    })
+    .catch(function (e) {
+      document.getElementById("scanTip").innerHTML =
+        '<span class="warn">無法啟用相機（' + e.message + '），請改用下方手動輸入學員編號或姓名。</span>';
+    });
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：顯示掃描引擎狀態
+ * 版本：v1.0（2026-09-20，沿用舊版做法）
+ * 用途：在畫面上標示目前用哪種方式解碼 QR Code，方便在手機
+ *       （尤其 iPhone 不支援瀏覽器原生 BarcodeDetector）上排查
+ *       掃描不到的問題，不需要連接電腦開發者工具也能看出是
+ *       「解碼函式庫沒載入」還是其他問題。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 顯示掃描引擎狀態() {
+  var str狀態;
+  if (bool使用原生偵測) {
+    str狀態 = "（使用瀏覽器原生掃碼）";
+  } else if (typeof jsQR === "function") {
+    str狀態 = "（使用 jsQR 掃碼函式庫）";
+  } else {
+    str狀態 = '<span class="warn">（掃碼函式庫載入失敗，暫時無法自動掃描，請改用下方手動輸入）</span>';
+  }
+  document.getElementById("scanTip").innerHTML = "請將 QR Code 對準鏡頭　" + str狀態;
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：掃描迴圈
+ * 版本：v1.0（2026-09-20，沿用舊版做法）
+ * 用途：透過 requestAnimationFrame 持續讀取相機畫面，逐格嘗試
+ *       解碼 QR Code；解碼成功就呼叫「處理掃描結果」。這個迴圈
+ *       不會因為掃到一筆資料就停止，掃完處理完會自動繼續掃下一格
+ *       畫面，達成「連續掃描」（2026-09-20 訪談確認：相機保持
+ *       開啟，掃完一位自動繼續掃下一位，適合現場排隊）。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 掃描迴圈() {
+  if (elVideo.readyState === elVideo.HAVE_ENOUGH_DATA) {
+    if (bool使用原生偵測) {
+      objBarcodeDetector.detect(elVideo).then(function (arrCodes) {
+        if (arrCodes.length > 0) 處理掃描結果(arrCodes[0].rawValue);
+      }).catch(function (e) { str最後錯誤 = e.message; });
+    } else if (typeof jsQR === "function") {
+      try {
+        elCanvas.width = elVideo.videoWidth;
+        elCanvas.height = elVideo.videoHeight;
+        ctxCanvas.drawImage(elVideo, 0, 0, elCanvas.width, elCanvas.height);
+        var objImageData = ctxCanvas.getImageData(0, 0, elCanvas.width, elCanvas.height);
+        var objCode = jsQR(objImageData.data, objImageData.width, objImageData.height);
+        int偵測影格數++;
+        if (objCode && objCode.data) 處理掃描結果(objCode.data);
+      } catch (e) {
+        str最後錯誤 = e.message;
+      }
+    }
+  }
+  requestAnimationFrame(掃描迴圈);
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：啟動除錯資訊更新
+ * 版本：v1.0（2026-09-20，沿用舊版做法）
+ * 用途：每秒更新一次畫面上的除錯資訊（偵測影格數、視訊尺寸、
+ *       readyState、最近錯誤），方便在手機上（無法直接看瀏覽器
+ *       主控台）判斷掃描迴圈是否真的有在執行，藉此排查「鏡頭有
+ *       畫面但掃不到」的問題。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 啟動除錯資訊更新() {
+  setInterval(function () {
+    var elDebug = document.getElementById("debugInfo");
+    if (!elDebug) return;
+    elDebug.innerText = "偵測影格數：" + int偵測影格數
+      + "　視訊尺寸：" + elVideo.videoWidth + "x" + elVideo.videoHeight
+      + "　readyState：" + elVideo.readyState
+      + (str最後錯誤 ? "　最近錯誤：" + str最後錯誤 : "");
+  }, 1000);
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理掃描結果
+ * 版本：v1.0（2026-09-20，沿用舊版做法，並加上「目前是否忙碌中」
+ *       的判斷，避免與手動輸入或前一次掃描的報到請求重疊）
+ * 用途：掃描到一組 QR Code 內容（學員編號）後，先做兩層防呆再
+ *       送出報到：(1) 同一組編號 3 秒內不重複觸發，避免鏡頭對著
+ *       同一張證件時被連續判讀成好幾次報到請求；(2) 若上一筆
+ *       報到請求還在處理中（btnSearch 仍是 disabled），這次先
+ *       略過，等處理完再讓下一次掃描結果生效，避免同時送出兩筆
+ *       報到請求。通過檢查後直接呼叫既有的「送出報到()」，效果
+ *       等同在輸入框打好編號按 Enter，完全沿用現有查詢與報到
+ *       邏輯（含同名同姓候選清單機制）。
+ * 參數：
+ *   str編號原始值 - 掃描到的 QR Code 內容（即學員編號）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 處理掃描結果(str編號原始值) {
+  if (document.getElementById("btnSearch").disabled) return;
+
+  var strNow = Date.now();
+  if (str編號原始值 === str上次掃描編號 && (strNow - int上次掃描時間) < 3000) return;
+  str上次掃描編號 = str編號原始值;
+  int上次掃描時間 = strNow;
+  送出報到(str編號原始值);
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理查詢按鈕點擊
+ * 版本：v2.0（2026-09-17，查到就直接報到，不再是唯讀查詢）
+ * 用途：讀取畫面上輸入的學員編號或姓名，做基本的空白檢查後，
+ *       呼叫「送出報到」執行查詢並視情況立即報到。
+ * 參數：無（直接從畫面欄位讀取）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 function 處理查詢按鈕點擊() {
   const str輸入內容 = document.getElementById("inputStudentId").value.trim();
 
@@ -274,6 +691,17 @@ function 處理查詢按鈕點擊() {
   送出報到(str輸入內容);
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：初始化頁面
+ * 版本：v1.0（2026-09-16）
+ * 用途：頁面載入時執行，檢查網址參數是否齊全，並呼叫「查詢場次
+ *       公開資訊」取得場次名稱、公告文字、狀態，顯示在畫面上方；
+ *       若場次已結束，顯示「已結束」標記並停用查詢功能。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 async function 初始化頁面() {
   const str精舍代碼 = 取得網址參數("temple");
   const str場次代碼 = 取得網址參數("session");
@@ -308,8 +736,16 @@ async function 初始化頁面() {
       document.getElementById("endedBadge").style.display = "inline-block";
       document.getElementById("inputStudentId").disabled = true;
       document.getElementById("btnSearch").disabled = true;
+      document.getElementById("scanTip").textContent = "本場次報到已結束，不再開啟相機掃描。";
     } else {
+      // 【v2.3】場次進行中：預設就顯示「請掃描 QR Code 進行報到」的
+      // 閒置提示（比照舊版報到系統畫面），並啟動相機開始連續掃描
+      顯示區塊訊息("msgResult", "請掃描 QR Code 進行報到", "info");
+      啟動相機();
       document.getElementById("inputStudentId").focus();
+      // 比照舊版報到系統的操作習慣：輸入學員編號後按 Enter 鍵，
+      // 效果等同直接點擊「查詢」按鈕，方便現場用掃描槍（模擬鍵盤輸入
+      // 並自動送出 Enter）或手動輸入時都不需要另外用滑鼠／手指點按鈕
       document.getElementById("inputStudentId").addEventListener("keydown", function (e) {
         if (e.key === "Enter") {
           e.preventDefault();
