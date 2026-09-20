@@ -8,8 +8,13 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v1.3（2026-09-20）
+   * 版本：v1.4（2026-09-20）
    * 版本歷程：
+   *   - v1.4（2026-09-20，法師建議）：卡片二「重新整理候選清單」、
+   *     卡片三「重新整理待複核清單」兩顆按鈕改名為「顯示候選清單」
+   *     「顯示待複核清單」，更準確反映這兩顆按鈕的實際行為（單純
+   *     重新讀取試算表目前內容顯示出來，不是重新計算或比對）。
+   *     純文字改名，onclick 呼叫的函式與後端 API 完全未變動。
    *   - v1.3（2026-09-20，法師詢問「組長手動新增名單時列ID如何補上」
    *     後訪談決議）：發現手動在「提報_XX組」分頁新增資料列會缺
    *     列ID，可能導致法師會議決議套用時誤刪其他缺列ID的資料列。
@@ -202,7 +207,7 @@
     <div class="desc">「檢核提報資料」會依序（1）用學員基本資料補齊姓名／法名／性別，查無資料的列會標黃提醒；（2）針對組長只填姓名、沒填學員編號的情況自動反查，唯一命中會自動補回，同名多筆或查無資料會列在下方候選清單，請核對後在候選學員編號欄位確認並回填。</div>
     <div class="step-row">
       <button class="action" id="btnCheckReportData" onclick="處理檢核提報資料按鈕點擊()">① 檢核提報資料</button>
-      <button class="action secondary" id="btnRefreshCandidateList" onclick="載入候選清單()">重新整理候選清單</button>
+      <button class="action secondary" id="btnRefreshCandidateList" onclick="載入候選清單()">顯示候選清單</button>
     </div>
     <div class="msg" id="msgMatch"></div>
 
@@ -218,7 +223,7 @@
     <div class="desc">「檢核聘書數」會依學員編號彙總全體職務數，超過門檻（3張聘書）的人整列標紅，並列在下方「待複核清單」，請法師會議逐筆針對「這一筆職務」勾選保留或取消（取消要填原因），選好後按「送出決議」一次送出。</div>
     <div class="step-row">
       <button class="action" id="btnSummarizeOverLimit" onclick="處理彙總職務數與超額標色按鈕點擊()">① 檢核聘書數</button>
-      <button class="action secondary" id="btnRefreshReviewList" onclick="載入待複核清單()">重新整理待複核清單</button>
+      <button class="action secondary" id="btnRefreshReviewList" onclick="載入待複核清單()">顯示待複核清單</button>
     </div>
     <div class="msg" id="msgSummarize"></div>
 
