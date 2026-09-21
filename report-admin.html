@@ -10,8 +10,18 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v1.7（2026-09-20）
+   * 版本：v1.8（2026-09-21）
    * 版本歷程：
+   *   - v1.8（2026-09-21，2026-09-20 訪談共識，法師已回覆「共識OK」）：
+   *     新增「五、組長名冊管理」卡片，供資料組維護「組長名冊」
+   *     （組別／組長姓名／Email）白名單，並提供「截止提報」總開關
+   *     （全體組別共用同一個開關，開啟後所有組長的線上表單一律
+   *     轉為唯讀），以及組長線上填寫表單（report-form.html）的
+   *     分享網址（含本精舍代碼查詢字串，附「複製」按鈕）。對應
+   *     後端 提報系統_04_組長作業.gs 新增的
+   *     查詢組長名冊／新增組長／修改組長／刪除組長／查詢截止提報
+   *     狀態／設定截止提報狀態 六個 action（沿用既有精舍登入 token，
+   *     不需要另外登入）。
    *   - v1.7（2026-09-20，法師建議）：卡片三「送出決議」按鈕文字前
    *     加上編號「②」，跟同卡片「① 檢核聘書數」的編號方式一致，
    *     讓「先檢核、再送出決議」的操作順序更清楚。純文字調整，
@@ -195,6 +205,36 @@
     color: #666;
     padding: 40px 0;
   }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .toggle-row label { font-size: 14px; cursor: pointer; }
+  .toggle-row input[type=checkbox] { transform: scale(1.3); cursor: pointer; }
+  .share-link-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    background: #f6f8fb;
+    border: 1px solid #e0e6ee;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    word-break: break-all;
+  }
+  .add-leader-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .add-leader-row input[type=text] { width: 160px; }
 </style>
 </head>
 <body>
@@ -273,6 +313,34 @@
     <div id="approvedListArea" style="margin-top:14px;">
       <div class="empty-hint">尚未載入核定名單。</div>
     </div>
+  </div>
+
+  <!-- 卡片五：組長名冊管理（2026-09-21 新增） -->
+  <div class="card">
+    <h2>五、組長名冊管理</h2>
+    <div class="desc">維護本精舍「組長名冊」白名單（組別／組長姓名／Email），組長要用登錄在這裡的 Google 帳號，才能登入下方連結的「組長線上填寫提報名單」網頁表單。「截止提報」是全體組別共用的總開關，開啟後所有組長的表單一律轉為唯讀，無法再新增／修改／刪除，需要異動請直接聯絡資料組協助處理。</div>
+
+    <div class="toggle-row">
+      <input type="checkbox" id="chkCloseSubmission" onchange="處理截止提報開關變更(this)">
+      <label for="chkCloseSubmission">截止提報（開啟後，所有組長的線上表單一律唯讀）</label>
+    </div>
+
+    <div class="share-link-row">
+      組長填寫網址：<span id="leaderFormUrlShow">（請先確認登入狀態）</span>
+      <button class="action secondary" onclick="處理複製組長表單網址按鈕點擊()">複製網址</button>
+    </div>
+
+    <div class="add-leader-row">
+      <input type="text" id="inputNewLeaderGroup" placeholder="組別（例如：機動組）">
+      <input type="text" id="inputNewLeaderName" placeholder="組長姓名（可留空）">
+      <input type="text" id="inputNewLeaderEmail" placeholder="組長 Google 帳號 Email">
+      <button class="action" onclick="處理新增組長按鈕點擊()">＋ 新增組長</button>
+    </div>
+
+    <div id="leaderListArea">
+      <div class="empty-hint">載入中...</div>
+    </div>
+    <div class="msg" id="msgLeaderList"></div>
   </div>
 
 </div>
@@ -933,6 +1001,187 @@ async function 處理下載核定名單按鈕點擊() {
 }
 
 
+// ==================== 【卡片五：組長名冊管理】 ====================
+
+/**
+ * ------------------------------------------------------------
+ * 函式：組出組長名冊表格HTML
+ * 版本：v1.0（2026-09-21）
+ * 用途：把「組長名冊」渲染成可直接編輯的表格，每一列的組別／
+ *       組長姓名／Email 都是輸入框，「儲存」按鈕呼叫「修改組長」，
+ *       「刪除」按鈕呼叫「刪除組長」，用「列號」對應後端那一列
+ *       （小規模、資料組單人維護的清單，維持簡單做法即可）。
+ * ------------------------------------------------------------
+ */
+function 組出組長名冊表格HTML(arr組長名冊) {
+  if (!arr組長名冊 || arr組長名冊.length === 0) {
+    return "<div class='empty-hint'>目前尚未登錄任何組長，請用上方欄位新增。</div>";
+  }
+
+  var strHTML = "<table><thead><tr>" +
+    "<th>組別</th><th>組長姓名</th><th>Email（組長 Google 帳號）</th><th>操作</th>" +
+    "</tr></thead><tbody>";
+
+  arr組長名冊.forEach(function (obj一筆) {
+    var int列號 = obj一筆.列號;
+    strHTML += "<tr data-row-num='" + int列號 + "'>" +
+      "<td><input type='text' id='leaderGroup_" + int列號 + "' value='" + 轉義HTML(obj一筆.組別) + "'></td>" +
+      "<td><input type='text' id='leaderName_" + int列號 + "' value='" + 轉義HTML(obj一筆.組長姓名) + "'></td>" +
+      "<td><input type='text' id='leaderEmail_" + int列號 + "' value='" + 轉義HTML(obj一筆.Email) + "'></td>" +
+      "<td>" +
+        "<button class='action secondary' onclick='處理儲存組長按鈕點擊(" + int列號 + ")'>儲存</button> " +
+        "<button class='action danger' onclick='處理刪除組長按鈕點擊(" + int列號 + ")'>刪除</button>" +
+      "</td>" +
+      "</tr>";
+  });
+
+  strHTML += "</tbody></table>";
+  return strHTML;
+}
+
+/** 版本 v1.0：載入組長名冊清單 */
+async function 載入組長名冊() {
+  const elArea = document.getElementById("leaderListArea");
+  try {
+    const objResult = await 呼叫提報API("查詢組長名冊");
+    if (objResult.成功) {
+      elArea.innerHTML = 組出組長名冊表格HTML(objResult.組長名冊);
+    } else {
+      elArea.innerHTML = "<div class='empty-hint'>載入失敗：" + 轉義HTML(objResult.訊息 || "未知錯誤") + "</div>";
+    }
+  } catch (錯誤) {
+    console.error("載入組長名冊時發生錯誤：", 錯誤);
+    elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
+  }
+}
+
+/** 版本 v1.0：新增組長 */
+async function 處理新增組長按鈕點擊() {
+  const str組別 = document.getElementById("inputNewLeaderGroup").value.trim();
+  const str組長姓名 = document.getElementById("inputNewLeaderName").value.trim();
+  const strEmail = document.getElementById("inputNewLeaderEmail").value.trim();
+
+  if (!str組別 || !strEmail) {
+    顯示區塊訊息("msgLeaderList", "請至少填寫「組別」與「Email」。", "error");
+    return;
+  }
+
+  顯示區塊訊息("msgLeaderList", "新增中，請稍候...", "info");
+  try {
+    const objResult = await 呼叫提報API("新增組長", { 組別: str組別, 組長姓名: str組長姓名, Email: strEmail });
+    顯示區塊訊息("msgLeaderList", objResult.訊息 || (objResult.成功 ? "新增成功。" : "新增失敗。"), objResult.成功 ? "success" : "error");
+    if (objResult.成功) {
+      document.getElementById("inputNewLeaderGroup").value = "";
+      document.getElementById("inputNewLeaderName").value = "";
+      document.getElementById("inputNewLeaderEmail").value = "";
+      await 載入組長名冊();
+    }
+  } catch (錯誤) {
+    console.error("新增組長時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgLeaderList", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  }
+}
+
+/** 版本 v1.0：儲存（修改）某一列組長資料 */
+async function 處理儲存組長按鈕點擊(int列號) {
+  const str組別 = document.getElementById("leaderGroup_" + int列號).value.trim();
+  const str組長姓名 = document.getElementById("leaderName_" + int列號).value.trim();
+  const strEmail = document.getElementById("leaderEmail_" + int列號).value.trim();
+
+  顯示區塊訊息("msgLeaderList", "儲存中，請稍候...", "info");
+  try {
+    const objResult = await 呼叫提報API("修改組長", {
+      列號: int列號,
+      變更欄位: { 組別: str組別, 組長姓名: str組長姓名, Email: strEmail }
+    });
+    顯示區塊訊息("msgLeaderList", objResult.訊息 || (objResult.成功 ? "已儲存。" : "儲存失敗。"), objResult.成功 ? "success" : "error");
+    if (objResult.成功) { await 載入組長名冊(); }
+  } catch (錯誤) {
+    console.error("儲存組長資料時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgLeaderList", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  }
+}
+
+/** 版本 v1.0：刪除某一列組長資料 */
+async function 處理刪除組長按鈕點擊(int列號) {
+  const bool確認 = window.confirm("確定要刪除這位組長的登錄資料嗎？刪除後這個 Email 就無法再登入「組長線上填寫提報名單」。");
+  if (!bool確認) { return; }
+
+  顯示區塊訊息("msgLeaderList", "刪除中，請稍候...", "info");
+  try {
+    const objResult = await 呼叫提報API("刪除組長", { 列號: int列號 });
+    顯示區塊訊息("msgLeaderList", objResult.訊息 || (objResult.成功 ? "已刪除。" : "刪除失敗。"), objResult.成功 ? "success" : "error");
+    if (objResult.成功) { await 載入組長名冊(); }
+  } catch (錯誤) {
+    console.error("刪除組長資料時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgLeaderList", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  }
+}
+
+/** 版本 v1.0：載入目前「截止提報」開關狀態，反映到畫面上的核取方塊 */
+async function 載入截止提報狀態() {
+  try {
+    const objResult = await 呼叫提報API("查詢截止提報狀態");
+    if (objResult.成功) {
+      document.getElementById("chkCloseSubmission").checked = !!objResult.截止提報;
+    }
+  } catch (錯誤) {
+    console.error("載入截止提報狀態時發生錯誤：", 錯誤);
+  }
+}
+
+/** 版本 v1.0：切換「截止提報」開關 */
+async function 處理截止提報開關變更(elCheckbox) {
+  const bool即將設定為 = elCheckbox.checked;
+  elCheckbox.disabled = true;
+  顯示區塊訊息("msgLeaderList", "設定中，請稍候...", "info");
+  try {
+    const objResult = await 呼叫提報API("設定截止提報狀態", { 截止提報: bool即將設定為 });
+    if (!objResult.成功) {
+      elCheckbox.checked = !bool即將設定為; // 失敗時把畫面狀態改回去，避免顯示跟實際不一致
+    }
+    顯示區塊訊息("msgLeaderList", objResult.訊息 || (objResult.成功 ? "已更新。" : "設定失敗。"), objResult.成功 ? "success" : "error");
+  } catch (錯誤) {
+    console.error("設定截止提報狀態時發生未預期錯誤：", 錯誤);
+    elCheckbox.checked = !bool即將設定為;
+    顯示區塊訊息("msgLeaderList", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  } finally {
+    elCheckbox.disabled = false;
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：顯示組長表單網址
+ * 版本：v1.0（2026-09-21）
+ * 用途：組出「組長線上填寫提報名單」網頁表單的完整分享網址（本頁
+ *       同目錄下的 report-form.html，帶上目前登入精舍的代碼查詢
+ *       字串），顯示在畫面上供資料組複製分享給組長。
+ * ------------------------------------------------------------
+ */
+function 顯示組長表單網址() {
+  const obj登入資訊 = 取得目前登入精舍資訊();
+  if (!obj登入資訊) { return; }
+  const strBaseUrl = window.location.href.substring(0, window.location.href.lastIndexOf("/") + 1);
+  const strUrl = strBaseUrl + "report-form.html?temple=" + encodeURIComponent(obj登入資訊.精舍代碼);
+  document.getElementById("leaderFormUrlShow").textContent = strUrl;
+}
+
+/** 版本 v1.0：複製組長表單網址到剪貼簿 */
+function 處理複製組長表單網址按鈕點擊() {
+  const strUrl = document.getElementById("leaderFormUrlShow").textContent;
+  if (!strUrl || strUrl.indexOf("http") !== 0) {
+    顯示區塊訊息("msgLeaderList", "尚未取得網址，請重新整理頁面再試一次。", "error");
+    return;
+  }
+  navigator.clipboard.writeText(strUrl).then(function () {
+    顯示區塊訊息("msgLeaderList", "已複製組長填寫網址，可以直接分享給組長。", "success");
+  }, function () {
+    顯示區塊訊息("msgLeaderList", "複製失敗，請手動選取上方網址複製。", "error");
+  });
+}
+
+
 // ==================== 【頁面初始化】 ====================
 
 /**
@@ -964,6 +1213,13 @@ async function 初始化頁面() {
   // 不自動載入候選清單／待複核清單／核定名單，維持各區塊原本的
   // 「尚未顯示OO清單」提示文字，需要看明細請按各卡片的「顯示OO
   // 清單」按鈕（2026-09-20 法師建議）。
+
+  // 卡片五「組長名冊管理」：組長名冊清單、截止提報開關狀態、分享網址，
+  // 這三項資料量小，直接在頁面載入時就顯示，不用像其他清單一樣
+  // 等資料組另外按「顯示」（2026-09-21 新增）。
+  顯示組長表單網址();
+  載入組長名冊();
+  載入截止提報狀態();
 }
 
 初始化頁面();
