@@ -1,35 +1,35 @@
 /**
  * ============================================================
  * 檔案：共用設定檔
- * 版本：v1.2（2026-09-19）
+ * 版本：v1.1（2026-09-18）
  * 版本歷程：
  *   - v1.1（2026-09-18）：`呼叫後端API()` 新增「連線失敗自動重試
  *     一次」機制，改善 Apps Script Web App 閒置後第一次呼叫偶爾
  *     連線失敗的現象（詳見該函式的變更說明）。
  *   - 2026-09-19：WEB_APP_網址 由待填佔位文字改填正式部署網址
  *     （不算邏輯變更，故不列入版本號，僅記錄異動時間點）。
- *   - v1.2（2026-09-19）：新增「總管理員登入資訊」的存取函式
- *     （儲存／取得／清除），供新增的 system-admin.html（系統管理
- *     後台）使用，比照既有精舍登入資訊的存取方式，統一集中管理
- *     sessionStorage 的 key 名稱，避免打錯字。
  * 說明：
  *   護法會雲端系統的前端共用設定，提報系統、報到系統、精舍後台
- *   管理、系統管理後台等所有頁面都引用這份設定檔，未來若 Web App
- *   網址變更（例如重新部署），只需要改這一個檔案，不用每個頁面
- *   都改一次。
+ *   管理等所有頁面都引用這份設定檔，未來若 Web App 網址變更
+ *   （例如重新部署），只需要改這一個檔案，不用每個頁面都改一次。
  * ============================================================
  */
 
 // 部署 Apps Script Web App 後拿到的網址（2026-09-19 填入正式部署網址）
 const WEB_APP_網址 = "https://script.google.com/macros/s/AKfycby5gQrRgR4rXzW9BSnmJ7_-jOvqb1OunMSquHiq0xQTsxuBWY0Y6BftEQYRpTeAHi8g/exec";
 
+// 【待辦，2026-09-21】「組長線上填寫提報名單網頁表單」（report-form.html）需要的
+// Google OAuth Client ID（前端 Google Identity Services 登入元件用），要跟後端
+// Script Properties 的 GOOGLE_CLIENT_ID 設成同一組值。目前尚未在 Google Cloud
+// Console 申請，先用佔位文字，申請完成後把下面這行改成實際的 Client ID 字串
+// （格式類似「1234567890-abcdefg.apps.googleusercontent.com」）即可生效，
+// 不需要改動其他程式碼。
+const GOOGLE_CLIENT_ID_前端 = "請填入GoogleOAuthClientId";
+
 // 精舍登入後，token 存在瀏覽器 sessionStorage 時使用的 key 名稱，統一集中管理避免打錯字
 const SESSION_KEY_精舍TOKEN = "護法會雲端系統_精舍token";
 const SESSION_KEY_精舍代碼 = "護法會雲端系統_精舍代碼";
 const SESSION_KEY_精舍顯示名稱 = "護法會雲端系統_精舍顯示名稱";
-
-// 總管理員登入後，token 存在瀏覽器 sessionStorage 時使用的 key 名稱
-const SESSION_KEY_管理者TOKEN = "護法會雲端系統_管理者token";
 
 
 /**
@@ -157,58 +157,4 @@ function 清除登入精舍資訊() {
   sessionStorage.removeItem(SESSION_KEY_精舍TOKEN);
   sessionStorage.removeItem(SESSION_KEY_精舍代碼);
   sessionStorage.removeItem(SESSION_KEY_精舍顯示名稱);
-}
-
-
-/**
- * ------------------------------------------------------------
- * 函式：取得目前登入管理者資訊
- * 版本：v1.0（2026-09-19）
- * 用途：從 sessionStorage 讀出總管理員的登入狀態，供
- *       system-admin.html 使用。設計方式比照
- *       取得目前登入精舍資訊()，只是總管理員不需要記住
- *       「代碼」或「顯示名稱」，只有一組 token。
- * 參數：無
- * 回傳：
- *   若已登入 → { token: str }
- *   若尚未登入 → null
- * ------------------------------------------------------------
- */
-function 取得目前登入管理者資訊() {
-  const strToken = sessionStorage.getItem(SESSION_KEY_管理者TOKEN);
-  if (!strToken) {
-    return null;
-  }
-  return { token: strToken };
-}
-
-
-/**
- * ------------------------------------------------------------
- * 函式：儲存登入管理者資訊
- * 版本：v1.0（2026-09-19）
- * 用途：總管理員登入成功後，把 token 寫入 sessionStorage。
- *       同樣使用 sessionStorage（而非 localStorage），關閉
- *       瀏覽器分頁後登入狀態就會消失，比較安全。
- * 參數：
- *   strToken - 登入成功後拿到的 token
- * 回傳：無
- * ------------------------------------------------------------
- */
-function 儲存登入管理者資訊(strToken) {
-  sessionStorage.setItem(SESSION_KEY_管理者TOKEN, strToken);
-}
-
-
-/**
- * ------------------------------------------------------------
- * 函式：清除登入管理者資訊
- * 版本：v1.0（2026-09-19）
- * 用途：登出時呼叫，清掉 sessionStorage 裡的總管理員登入資訊。
- * 參數：無
- * 回傳：無
- * ------------------------------------------------------------
- */
-function 清除登入管理者資訊() {
-  sessionStorage.removeItem(SESSION_KEY_管理者TOKEN);
 }
