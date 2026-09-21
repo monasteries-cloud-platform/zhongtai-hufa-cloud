@@ -9,7 +9,16 @@
   /*
    * ============================================================
    * 檔案：組長線上填寫提報名單網頁表單
-   * 版本：v1.0（2026-09-21）
+   * 版本：v1.1（2026-09-21）
+   * 版本歷程：
+   *   - v1.1（2026-09-21，法師實測後訪談決議）：既有列（有列ID，
+   *     匯入時就存在的資料）的「學員編號／姓名／法名／性別／原任
+   *     職稱」五欄一律鎖定唯讀，避免組長誤改身分資料；「續聘／
+   *     新聘任職事／備註」三欄維持可編輯。新增列（組長線上新增、
+   *     還沒有列ID）不受此限，八欄都可編輯。以上都只在「截止
+   *     提報」未開啟時適用，開啟後仍是全部欄位鎖定唯讀。詳見
+   *     組出名單表格HTML 的說明。
+   *   - v1.0（2026-09-21）：初版。
    * 說明：
    *   2026-09-20 訪談 11 點共識（法師已於 2026-09-21 回覆「共識OK」）
    *   的前端實作。組長本人用 Google 帳號登入後，直接檢視／新增／
@@ -304,6 +313,23 @@ function 處理登出按鈕點擊() {
 var arr目前名單 = [];   // 畫面上目前的名單資料（含既有列的列ID，新增列沒有列ID）
 var int新增列流水號 = 0; // 純前端用的暫時識別碼，區分畫面上哪幾列是「這次新增、還沒有列ID」的
 
+/**
+ * ------------------------------------------------------------
+ * 函式：組出名單表格HTML
+ * 版本：v1.1（2026-09-21）
+ * 用途：2026-09-21 法師實測後訪談決議：「提報名單中原有的資料」
+ *       （匯入時就存在、有列ID的既有列）跟「這次線上新增的資料」
+ *       （組長按「＋新增一列」新增、還沒有列ID），欄位可否修改的
+ *       範圍不一樣：
+ *       - 既有列的「學員編號／姓名／法名／性別／原任職稱」這五個
+ *         欄位一律鎖定唯讀，不管「截止提報」開關有沒有開，避免
+ *         組長不小心改動到資料組匯入的原始身分資料；「續聘／新聘
+ *         任職事／備註」三個欄位維持可編輯（除非「截止提報」已經
+ *         開啟，全部欄位才會鎖定）。
+ *       - 全新新增的列（沒有列ID）不受此限，八個欄位都可以編輯
+ *        （一樣除非「截止提報」已經開啟）。
+ * ------------------------------------------------------------
+ */
 function 組出名單表格HTML(bool是否唯讀) {
   var strHTML = "<table><thead><tr>" +
     "<th>學員編號</th><th>姓名</th><th>法名</th><th>性別</th><th>原任職稱</th>" +
@@ -311,16 +337,19 @@ function 組出名單表格HTML(bool是否唯讀) {
     "</tr></thead><tbody>";
 
   arr目前名單.forEach(function (obj一筆, int索引) {
-    var str唯讀屬性 = bool是否唯讀 ? " disabled" : "";
+    // 既有列＝匯入時就存在、有列ID；新增列＝這次組長線上新增、還沒有列ID
+    var bool是既有列 = obj一筆.列ID !== undefined && obj一筆.列ID !== null && obj一筆.列ID !== "";
+    var str核心欄位唯讀屬性 = (bool是否唯讀 || bool是既有列) ? " disabled" : ""; // 學員編號／姓名／法名／性別／原任職稱
+    var str可改欄位唯讀屬性 = bool是否唯讀 ? " disabled" : ""; // 續聘／新聘任職事／備註
     strHTML += "<tr data-row-index='" + int索引 + "'>" +
-      "<td><input type='text' id='rowField_" + int索引 + "_學員編號' value='" + 轉義HTML(obj一筆.學員編號) + "'" + str唯讀屬性 + "></td>" +
-      "<td><input type='text' id='rowField_" + int索引 + "_姓名' value='" + 轉義HTML(obj一筆.姓名) + "'" + str唯讀屬性 + "></td>" +
-      "<td><input type='text' id='rowField_" + int索引 + "_法名' value='" + 轉義HTML(obj一筆.法名) + "'" + str唯讀屬性 + "></td>" +
-      "<td><input type='text' id='rowField_" + int索引 + "_性別' value='" + 轉義HTML(obj一筆.性別) + "' style='width:44px;'" + str唯讀屬性 + "></td>" +
-      "<td><input type='text' id='rowField_" + int索引 + "_原任職稱' value='" + 轉義HTML(obj一筆.原任職稱) + "'" + str唯讀屬性 + "></td>" +
-      "<td style='text-align:center;'><input type='checkbox' id='rowField_" + int索引 + "_續聘'" + (obj一筆["續聘（打勾）"] ? " checked" : "") + str唯讀屬性 + "></td>" +
-      "<td><input type='text' id='rowField_" + int索引 + "_新聘任職事' value='" + 轉義HTML(obj一筆.新聘任職事) + "'" + str唯讀屬性 + "></td>" +
-      "<td><input type='text' id='rowField_" + int索引 + "_備註' value='" + 轉義HTML(obj一筆.備註) + "'" + str唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_學員編號' value='" + 轉義HTML(obj一筆.學員編號) + "'" + str核心欄位唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_姓名' value='" + 轉義HTML(obj一筆.姓名) + "'" + str核心欄位唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_法名' value='" + 轉義HTML(obj一筆.法名) + "'" + str核心欄位唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_性別' value='" + 轉義HTML(obj一筆.性別) + "' style='width:44px;'" + str核心欄位唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_原任職稱' value='" + 轉義HTML(obj一筆.原任職稱) + "'" + str核心欄位唯讀屬性 + "></td>" +
+      "<td style='text-align:center;'><input type='checkbox' id='rowField_" + int索引 + "_續聘'" + (obj一筆["續聘（打勾）"] ? " checked" : "") + str可改欄位唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_新聘任職事' value='" + 轉義HTML(obj一筆.新聘任職事) + "'" + str可改欄位唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_備註' value='" + 轉義HTML(obj一筆.備註) + "'" + str可改欄位唯讀屬性 + "></td>" +
       (bool是否唯讀 ? "" : "<td><button class='danger' onclick='處理刪除一列點擊(" + int索引 + ")'>刪除</button></td>") +
       "</tr>";
   });
