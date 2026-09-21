@@ -5,6 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>護法會雲端系統 - 精舍後台管理</title>
 <style>
+  /*
+   * ============================================================
+   * 檔案：精舍後台管理頁面
+   * 版本：v1.1（2026-09-21）
+   * 版本歷程：
+   *   - v1.0（2026-09-16）：初版，修改密碼＋設定6種試算表ID。
+   *   - v1.1（2026-09-21）：新增「卡片二：自動建立試算表」——填入
+   *     擁有者Email 後一鍵複製範本、建立 6 份正式試算表、自動填回
+   *     ID，取代原本「新增精舍操作SOP」的人工複製流程；原本的
+   *     「試算表ID設定」卡片保留，作為手動救援/微調用途，改列為
+   *     卡片三。
+   * 說明：
+   *   精舍登入後的自助管理頁面，提供三項功能：
+   *   1. 修改精舍密碼（可選，不修改也能繼續使用預設密碼 1234）
+   *   2. 自動建立試算表（填入擁有者 Email 後一鍵建立 6 份試算表）
+   *   3. 手動設定/調整 6 種試算表 ID（資料庫、名單回報、出席回報、
+   *      報到名單、封存備查、學員基本資料），作為救援或微調用途
+   *   進入本頁前會先檢查 sessionStorage 是否有登入資訊，沒有就
+   *   導回登入頁面。
+   * ============================================================
+   */
   body {
     font-family: "微軟正黑體", "PMingLiU", sans-serif;
     background: #f4f6f9;
@@ -118,6 +139,7 @@
     </div>
   </div>
 
+  <!-- 卡片一：修改密碼 -->
   <div class="card">
     <h2>修改精舍密碼</h2>
     <div class="desc">
@@ -137,11 +159,31 @@
     <div class="msg" id="msgChangePassword"></div>
   </div>
 
+  <!-- 卡片二：自動建立試算表 -->
+  <div class="card">
+    <h2>自動建立試算表</h2>
+    <div class="desc">
+      填入貴精舍未來要用來管理試算表的 Google 帳號 Email，按下方按鈕後，系統會自動複製
+      6 份最新範本、建立成貴精舍專屬的正式試算表，並自動把 6 個試算表 ID 填入下方「試算表
+      ID 設定」。建立後會嘗試把這 6 份試算表的擁有權轉移給您填的 Email；若您的帳號跟中台
+      帳號不同網域（例如一般個人 Gmail），該信箱會收到 Google 的「轉移檔案擁有權」通知信，
+      需要您登入該帳號點擊接受才會完成正式轉移，接受前試算表仍可正常使用。
+    </div>
+
+    <label for="inputOwnerEmail">擁有者 Email</label>
+    <input type="text" id="inputOwnerEmail" autocomplete="off" placeholder="例如 abc@gmail.com">
+
+    <button class="action" id="btnAutoCreate" onclick="處理自動建立試算表按鈕點擊()">自動建立試算表</button>
+    <div class="msg" id="msgAutoCreate"></div>
+  </div>
+
+  <!-- 卡片三：試算表 ID 設定（手動救援/微調用途） -->
   <div class="card">
     <h2>試算表 ID 設定</h2>
     <div class="desc">
-      請填入貴精舍對應的 6 種 Google 試算表 ID（試算表網址中 /d/ 與 /edit 之間的一長串英數字）。
-      未填寫的欄位會維持原本設定不變。
+      一般情況下建議使用上方「自動建立試算表」即可，不需要手動填寫這裡。這裡保留作為手動
+      救援或個別微調用途：可直接貼上既有 Google 試算表 ID（試算表網址中 /d/ 與 /edit 之間
+      的一長串英數字）。未填寫的欄位會維持原本設定不變。
     </div>
 
     <label for="input資料庫試算表ID">資料庫試算表ID</label>
@@ -171,6 +213,8 @@
 <script src="config.js"></script>
 <script>
 
+// 6 種試算表欄位名稱，集中放在這裡，避免畫面各處分散寫死字串造成打錯字風險
+// （欄位名稱需與後端 系統管理_01_資料存取.gs 的 ARR_試算表欄位清單 完全一致）
 const ARR_試算表欄位名稱 = [
   "資料庫試算表ID",
   "名單回報試算表ID",
@@ -180,17 +224,50 @@ const ARR_試算表欄位名稱 = [
   "學員基本資料試算表ID"
 ];
 
+/**
+ * ------------------------------------------------------------
+ * 函式：顯示區塊訊息
+ * 版本：v1.0（2026-09-16）
+ * 用途：在指定的訊息區塊顯示提示、成功或錯誤訊息。
+ * 參數：
+ *   strMsgElementId - 要顯示訊息的元素 id
+ *   str訊息內容      - 顯示的文字
+ *   str樣式           - "error" / "success" / "info" 三選一
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 function 顯示區塊訊息(strMsgElementId, str訊息內容, str樣式) {
   const elMsg = document.getElementById(strMsgElementId);
   elMsg.textContent = str訊息內容;
   elMsg.className = "msg " + str樣式;
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：處理登出按鈕點擊
+ * 版本：v1.0（2026-09-16）
+ * 用途：清除登入資訊並導回登入頁面。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 function 處理登出按鈕點擊() {
   清除登入精舍資訊();
   window.location.href = "login.html";
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：處理修改密碼按鈕點擊
+ * 版本：v1.0（2026-09-16）
+ * 用途：驗證畫面輸入（新密碼兩次輸入是否一致等）後，呼叫後端
+ *       「精舍修改密碼」API。成功後提示使用者，並清空密碼欄位；
+ *       注意：修改密碼後，目前分頁的登入狀態仍然有效（token 不會
+ *       立即失效，這是已確認的設計），不需要強制重新登入。
+ * 參數：無（直接從畫面欄位讀取）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 async function 處理修改密碼按鈕點擊() {
   const str舊密碼 = document.getElementById("inputOldPassword").value;
   const str新密碼 = document.getElementById("inputNewPassword").value;
@@ -212,6 +289,7 @@ async function 處理修改密碼按鈕點擊() {
 
   const obj登入資訊 = 取得目前登入精舍資訊();
   if (!obj登入資訊) {
+    // 理論上不會發生（進頁面時已檢查過），但防禦性檢查避免 token 中途過期時出現不明錯誤
     顯示區塊訊息("msgChangePassword", "登入狀態已失效，請重新登入。", "error");
     setTimeout(() => { window.location.href = "login.html"; }, 1500);
     return;
@@ -245,6 +323,17 @@ async function 處理修改密碼按鈕點擊() {
   }
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：處理儲存試算表ID按鈕點擊
+ * 版本：v1.0（2026-09-16）
+ * 用途：讀取畫面上 6 個試算表 ID 欄位，只把「使用者有實際輸入」
+ *       的欄位送給後端（空白欄位不送出，避免不小心把原本已設定
+ *       好的值清空），呼叫「精舍設定試算表ID」API。
+ * 參數：無（直接從畫面欄位讀取）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 async function 處理儲存試算表ID按鈕點擊() {
   const obj登入資訊 = 取得目前登入精舍資訊();
   if (!obj登入資訊) {
@@ -253,6 +342,7 @@ async function 處理儲存試算表ID按鈕點擊() {
     return;
   }
 
+  // 組出「試算表ID物件」，只放有填寫內容的欄位
   const obj試算表ID物件 = {};
   let int已填寫欄位數 = 0;
   ARR_試算表欄位名稱.forEach(function (str欄位名稱) {
@@ -282,6 +372,7 @@ async function 處理儲存試算表ID按鈕點擊() {
 
     if (objResult.成功) {
       顯示區塊訊息("msgSaveSheets", "試算表 ID 設定已儲存。", "success");
+      // 重新載入目前設定，讓畫面反映最新狀態
       await 載入目前精舍設定();
     } else {
       顯示區塊訊息("msgSaveSheets", objResult.訊息 || "儲存失敗，請確認輸入內容是否正確。", "error");
@@ -294,6 +385,95 @@ async function 處理儲存試算表ID按鈕點擊() {
   }
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：處理自動建立試算表按鈕點擊
+ * 版本：v1.0（2026-09-21）
+ * 用途：先儲存擁有者 Email，再呼叫「精舍建立試算表」API；若後端
+ *       回應「需要確認覆蓋」（本精舍已經有試算表ID設定過），跳出
+ *       瀏覽器確認視窗讓使用者二次確認後才真正覆蓋建立。
+ * 參數：無（直接從畫面欄位讀取）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+async function 處理自動建立試算表按鈕點擊() {
+  const obj登入資訊 = 取得目前登入精舍資訊();
+  if (!obj登入資訊) {
+    顯示區塊訊息("msgAutoCreate", "登入狀態已失效，請重新登入。", "error");
+    setTimeout(() => { window.location.href = "login.html"; }, 1500);
+    return;
+  }
+
+  const str擁有者Email = document.getElementById("inputOwnerEmail").value.trim();
+  if (!str擁有者Email) {
+    顯示區塊訊息("msgAutoCreate", "請先填寫擁有者 Email（貴精舍未來要用來管理試算表的 Google 帳號）。", "error");
+    return;
+  }
+
+  const btn按鈕 = document.getElementById("btnAutoCreate");
+  btn按鈕.disabled = true;
+
+  try {
+    顯示區塊訊息("msgAutoCreate", "儲存 Email 中，請稍候...", "info");
+    const objEmailResult = await 呼叫後端API({
+      system: "temple",
+      action: "精舍設定擁有者Email",
+      token: obj登入資訊.token,
+      擁有者Email: str擁有者Email
+    });
+    if (!objEmailResult.成功) {
+      顯示區塊訊息("msgAutoCreate", objEmailResult.訊息 || "Email 儲存失敗，請確認格式是否正確。", "error");
+      return;
+    }
+
+    顯示區塊訊息("msgAutoCreate", "建立試算表中，請稍候（可能需要數秒到十幾秒）...", "info");
+    let objResult = await 呼叫後端API({
+      system: "temple",
+      action: "精舍建立試算表",
+      token: obj登入資訊.token,
+      確認覆蓋: false
+    });
+
+    if (!objResult.成功 && objResult.需要確認覆蓋) {
+      const bool確認 = window.confirm(objResult.訊息 + "\n\n（按「確定」將覆蓋原本設定並建立全新試算表）");
+      if (!bool確認) {
+        顯示區塊訊息("msgAutoCreate", "已取消，未建立新試算表。", "info");
+        return;
+      }
+      顯示區塊訊息("msgAutoCreate", "建立試算表中，請稍候...", "info");
+      objResult = await 呼叫後端API({
+        system: "temple",
+        action: "精舍建立試算表",
+        token: obj登入資訊.token,
+        確認覆蓋: true
+      });
+    }
+
+    if (objResult.成功) {
+      顯示區塊訊息("msgAutoCreate", objResult.訊息 || "試算表建立成功。", "success");
+      await 載入目前精舍設定();
+    } else {
+      顯示區塊訊息("msgAutoCreate", objResult.訊息 || "建立試算表失敗，請稍後再試或聯絡總管理員。", "error");
+    }
+  } catch (錯誤) {
+    console.error("自動建立試算表過程發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgAutoCreate", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  } finally {
+    btn按鈕.disabled = false;
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：載入目前精舍設定
+ * 版本：v1.0（2026-09-16）
+ * 用途：呼叫「精舍取得自己的設定」API，把目前已設定的試算表 ID
+ *       顯示在畫面欄位中，方便使用者確認或修改（後端回傳內容不
+ *       包含密碼欄位，符合安全設計）。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 async function 載入目前精舍設定() {
   const obj登入資訊 = 取得目前登入精舍資訊();
   if (!obj登入資訊) { return; }
@@ -310,16 +490,30 @@ async function 載入目前精舍設定() {
         const elInput = document.getElementById("input" + str欄位名稱);
         elInput.value = objResult.設定[str欄位名稱] || "";
       });
+      document.getElementById("inputOwnerEmail").value = objResult.設定.擁有者Email || "";
     }
+    // 若查詢失敗，不特別跳錯誤訊息干擾使用者，欄位維持空白即可，
+    // 使用者仍然可以重新填寫並儲存
   } catch (錯誤) {
     console.error("載入目前精舍設定時發生錯誤：", 錯誤);
   }
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：初始化頁面
+ * 版本：v1.0（2026-09-16）
+ * 用途：頁面載入時執行，檢查登入狀態，沒登入就導回登入頁面；
+ *       已登入則顯示精舍名稱，並載入目前的試算表設定。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 async function 初始化頁面() {
   const obj登入資訊 = 取得目前登入精舍資訊();
 
   if (!obj登入資訊) {
+    // 沒有登入資訊，導回登入頁面
     window.location.href = "login.html";
     return;
   }
