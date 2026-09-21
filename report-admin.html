@@ -10,8 +10,16 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v1.9（2026-09-21）
+   * 版本：v1.10（2026-09-21）
    * 版本歷程：
+   *   - v1.10（2026-09-21，法師建議）：「組長名冊管理」卡片改版，
+   *     拿掉原本列出全部組長的表格清單，改成單一表單：選好「組別」
+   *     後自動帶出既有姓名／Email（沒有既有資料就是空白），「新增」
+   *     「修改」「刪除」三個按鈕一律都顯示——「新增」永遠是新增
+   *     一筆（同組別可以有多位共同組長都各自新增一筆），「修改」
+   *     「刪除」則作用在選組別時自動帶出的那一筆既有資料，選到
+   *     全新組別（還沒有資料）時按「修改」或「刪除」會提示改用
+   *     「新增」。畫面更單純，資料組不用再往下捲清單找要改的那一列。
    *   - v1.9（2026-09-21，法師建議）：「組長名冊管理」卡片「新增組長」
    *     表單的「組別」欄位，從自由輸入文字改成下拉選單（資料來源＝
    *     既有「提報_XX組」分頁名稱，對應後端新增的 執行查詢提報分頁
@@ -337,18 +345,19 @@
       <button class="action secondary" onclick="處理複製組長表單網址按鈕點擊()">複製網址</button>
     </div>
 
+    <div class="desc">操作方式：先選「組別」，若這個組別之前已經登錄過組長，系統會自動帶出姓名與 Email；確認或修改姓名／Email 後，按「新增」「修改」或「刪除」執行對應動作即可，不需要另外查看清單。</div>
+
     <div class="add-leader-row">
       <select id="inputNewLeaderGroup" onchange="處理新增組長組別選擇變更()">
         <option value="">請選擇組別...</option>
       </select>
       <input type="text" id="inputNewLeaderName" placeholder="組長姓名（可留空，選組別後會自動帶入）">
       <input type="text" id="inputNewLeaderEmail" placeholder="組長 Google 帳號 Email">
-      <button class="action" onclick="處理新增組長按鈕點擊()">＋ 新增組長</button>
+      <button class="action" onclick="處理新增組長按鈕點擊()">新增</button>
+      <button class="action secondary" onclick="處理修改組長按鈕點擊()">修改</button>
+      <button class="action danger" onclick="處理刪除組長按鈕點擊()">刪除</button>
     </div>
 
-    <div id="leaderListArea">
-      <div class="empty-hint">載入中...</div>
-    </div>
     <div class="msg" id="msgLeaderList"></div>
   </div>
 
@@ -1012,62 +1021,39 @@ async function 處理下載核定名單按鈕點擊() {
 
 // ==================== 【卡片五：組長名冊管理】 ====================
 
-// 快取「載入組長名冊」最近一次拿到的資料，供「選擇組別後自動帶出組長姓名」查找用，
-// 不用每次選擇組別都重新呼叫後端 API（2026-09-21 新增）。
+// 快取「載入組長名冊」最近一次拿到的資料，供「選擇組別後自動帶出組長姓名／Email」
+// 查找用，不用每次選擇組別都重新呼叫後端 API（2026-09-21 新增）。
 var g_組長名冊快取 = [];
+
+// 目前畫面上選到的組別，若在「組長名冊」裡已經有既有資料，這裡記錄那一列的「列號」，
+// 供「修改」「刪除」按鈕使用；選到全新組別（名冊裡還沒有資料）或清空選單時為 null。
+// 2026-09-21 訪談決議：改版拿掉原本「完整清單表格」的呈現方式，只留「選組別→帶出
+// 資料→新增／修改／刪除」這組單一表單操作，減少畫面複雜度（法師建議）。
+var g_目前選擇組長列號 = null;
 
 /**
  * ------------------------------------------------------------
- * 函式：組出組長名冊表格HTML
- * 版本：v1.0（2026-09-21）
- * 用途：把「組長名冊」渲染成可直接編輯的表格，每一列的組別／
- *       組長姓名／Email 都是輸入框，「儲存」按鈕呼叫「修改組長」，
- *       「刪除」按鈕呼叫「刪除組長」，用「列號」對應後端那一列
- *       （小規模、資料組單人維護的清單，維持簡單做法即可）。
+ * 函式：載入組長名冊
+ * 版本：v1.1（2026-09-21）
+ * 用途：讀取「組長名冊」全部資料存進 g_組長名冊快取，供「選擇組別」
+ *       時查找用。2026-09-21 改版後不再把資料組成表格顯示在畫面上
+ *       （法師訪談決議：清單不用列出，只需要「選組別→新增／修改／
+ *       刪除」這組單一表單），純粹當作查找用的資料來源。
  * ------------------------------------------------------------
  */
-function 組出組長名冊表格HTML(arr組長名冊) {
-  if (!arr組長名冊 || arr組長名冊.length === 0) {
-    return "<div class='empty-hint'>目前尚未登錄任何組長，請用上方欄位新增。</div>";
-  }
-
-  var strHTML = "<table><thead><tr>" +
-    "<th>組別</th><th>組長姓名</th><th>Email（組長 Google 帳號）</th><th>操作</th>" +
-    "</tr></thead><tbody>";
-
-  arr組長名冊.forEach(function (obj一筆) {
-    var int列號 = obj一筆.列號;
-    strHTML += "<tr data-row-num='" + int列號 + "'>" +
-      "<td><input type='text' id='leaderGroup_" + int列號 + "' value='" + 轉義HTML(obj一筆.組別) + "'></td>" +
-      "<td><input type='text' id='leaderName_" + int列號 + "' value='" + 轉義HTML(obj一筆.組長姓名) + "'></td>" +
-      "<td><input type='text' id='leaderEmail_" + int列號 + "' value='" + 轉義HTML(obj一筆.Email) + "'></td>" +
-      "<td>" +
-        "<button class='action secondary' onclick='處理儲存組長按鈕點擊(" + int列號 + ")'>儲存</button> " +
-        "<button class='action danger' onclick='處理刪除組長按鈕點擊(" + int列號 + ")'>刪除</button>" +
-      "</td>" +
-      "</tr>";
-  });
-
-  strHTML += "</tbody></table>";
-  return strHTML;
-}
-
-/** 版本 v1.0：載入組長名冊清單 */
 async function 載入組長名冊() {
-  const elArea = document.getElementById("leaderListArea");
   try {
     const objResult = await 呼叫提報API("查詢組長名冊");
     if (objResult.成功) {
       g_組長名冊快取 = objResult.組長名冊 || [];
-      elArea.innerHTML = 組出組長名冊表格HTML(objResult.組長名冊);
     } else {
       g_組長名冊快取 = [];
-      elArea.innerHTML = "<div class='empty-hint'>載入失敗：" + 轉義HTML(objResult.訊息 || "未知錯誤") + "</div>";
+      顯示區塊訊息("msgLeaderList", "載入組長名冊失敗：" + (objResult.訊息 || "未知錯誤"), "error");
     }
   } catch (錯誤) {
     console.error("載入組長名冊時發生錯誤：", 錯誤);
     g_組長名冊快取 = [];
-    elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
+    顯示區塊訊息("msgLeaderList", "載入組長名冊時發生未預期錯誤，請重新整理頁面再試一次。", "error");
   }
 }
 
@@ -1102,30 +1088,43 @@ async function 載入可選組別清單() {
 /**
  * ------------------------------------------------------------
  * 函式：處理新增組長組別選擇變更
- * 版本：v1.0（2026-09-21）
- * 用途：資料組在「新增組長」選好組別後，自動帶出該組別在「組長
- *       名冊」裡既有的組長姓名（例如上一期匯入提報名單時，系統已經
- *       自動寫入的組長姓名），資料組不用再手動打字，只要確認姓名、
- *       填上 Email 即可。若該組別在名冊裡還沒有任何資料（全新組別），
- *       姓名欄位維持空白，交由資料組自行輸入。同一組別若名冊中有
- *       多筆（例如一位組長身兼多組、或有共同組長的情況），採用第一筆
- *       符合的姓名，資料組仍可自行修改。
+ * 版本：v1.1（2026-09-21）
+ * 用途：資料組選好組別後，自動帶出該組別在「組長名冊」裡既有的
+ *       組長姓名與 Email（例如上一期匯入提報名單時，系統已經自動
+ *       寫入的組長姓名），並記住這筆資料的「列號」到 g_目前選擇
+ *       組長列號，供「修改」「修改」「刪除」按鈕判斷這個組別是
+ *       「已有資料（可修改／可刪除）」還是「全新組別（只能新增）」。
+ *       若該組別在名冊裡還沒有任何資料，姓名／Email 都清空，
+ *       g_目前選擇組長列號 設為 null。同一組別若名冊中有多筆
+ *       （例如一位組長身兼多組、或有共同組長的情況），採用第一筆
+ *       符合的資料，資料組仍可自行修改姓名／Email 後用「新增」
+ *       另外登錄第二位組長。
  * ------------------------------------------------------------
  */
 function 處理新增組長組別選擇變更() {
   const str組別 = document.getElementById("inputNewLeaderGroup").value;
   const elName = document.getElementById("inputNewLeaderName");
+  const elEmail = document.getElementById("inputNewLeaderEmail");
 
-  if (!str組別) {
-    elName.value = "";
-    return;
-  }
+  const obj符合項目 = str組別
+    ? g_組長名冊快取.find(function (obj一筆) { return obj一筆.組別 === str組別; })
+    : null;
 
-  const obj符合項目 = g_組長名冊快取.find(function (obj一筆) { return obj一筆.組別 === str組別; });
   elName.value = obj符合項目 ? obj符合項目.組長姓名 : "";
+  elEmail.value = obj符合項目 ? obj符合項目.Email : "";
+  g_目前選擇組長列號 = obj符合項目 ? obj符合項目.列號 : null;
 }
 
-/** 版本 v1.1：新增組長（2026-09-21：組別改為下拉選單，新增後連同組別清單一併重設） */
+/**
+ * ------------------------------------------------------------
+ * 函式：處理新增組長按鈕點擊
+ * 版本：v1.1（2026-09-21）
+ * 用途：一律「新增一筆新資料」（appendRow），不管目前選的組別是否
+ *       已經有既有資料——如果該組別已經有人、又想再新增一筆，代表
+ *       這個組別有多位共同組長，兩筆資料都會保留，都能各自用自己
+ *       的 Email 登入同一個組別的表單。
+ * ------------------------------------------------------------
+ */
 async function 處理新增組長按鈕點擊() {
   const str組別 = document.getElementById("inputNewLeaderGroup").value.trim();
   const str組長姓名 = document.getElementById("inputNewLeaderName").value.trim();
@@ -1141,10 +1140,8 @@ async function 處理新增組長按鈕點擊() {
     const objResult = await 呼叫提報API("新增組長", { 組別: str組別, 組長姓名: str組長姓名, Email: strEmail });
     顯示區塊訊息("msgLeaderList", objResult.訊息 || (objResult.成功 ? "新增成功。" : "新增失敗。"), objResult.成功 ? "success" : "error");
     if (objResult.成功) {
-      document.getElementById("inputNewLeaderGroup").value = "";
-      document.getElementById("inputNewLeaderName").value = "";
-      document.getElementById("inputNewLeaderEmail").value = "";
       await 載入組長名冊();
+      處理新增組長組別選擇變更(); // 重新比對，讓畫面反映剛新增的這筆資料（含列號）
     }
   } catch (錯誤) {
     console.error("新增組長時發生未預期錯誤：", 錯誤);
@@ -1152,36 +1149,72 @@ async function 處理新增組長按鈕點擊() {
   }
 }
 
-/** 版本 v1.0：儲存（修改）某一列組長資料 */
-async function 處理儲存組長按鈕點擊(int列號) {
-  const str組別 = document.getElementById("leaderGroup_" + int列號).value.trim();
-  const str組長姓名 = document.getElementById("leaderName_" + int列號).value.trim();
-  const strEmail = document.getElementById("leaderEmail_" + int列號).value.trim();
+/**
+ * ------------------------------------------------------------
+ * 函式：處理修改組長按鈕點擊
+ * 版本：v1.0（2026-09-21）
+ * 用途：把目前畫面上的組別／姓名／Email，覆寫回 g_目前選擇組長
+ *       列號 記住的那一列。這個按鈕只能用來修改「選組別時已經自動
+ *       帶出資料」的既有列，若目前選的是全新組別（還沒有資料），
+ *       畫面提示改用「新增」，避免誤按修改卻找不到資料列可改。
+ * ------------------------------------------------------------
+ */
+async function 處理修改組長按鈕點擊() {
+  if (!g_目前選擇組長列號) {
+    顯示區塊訊息("msgLeaderList", "這個組別目前還沒有登錄過組長資料，請按「新增」，不是「修改」。", "error");
+    return;
+  }
 
-  顯示區塊訊息("msgLeaderList", "儲存中，請稍候...", "info");
+  const str組別 = document.getElementById("inputNewLeaderGroup").value.trim();
+  const str組長姓名 = document.getElementById("inputNewLeaderName").value.trim();
+  const strEmail = document.getElementById("inputNewLeaderEmail").value.trim();
+
+  if (!str組別 || !strEmail) {
+    顯示區塊訊息("msgLeaderList", "請至少選擇「組別」並填寫「Email」。", "error");
+    return;
+  }
+
+  顯示區塊訊息("msgLeaderList", "修改中，請稍候...", "info");
   try {
     const objResult = await 呼叫提報API("修改組長", {
-      列號: int列號,
+      列號: g_目前選擇組長列號,
       變更欄位: { 組別: str組別, 組長姓名: str組長姓名, Email: strEmail }
     });
-    顯示區塊訊息("msgLeaderList", objResult.訊息 || (objResult.成功 ? "已儲存。" : "儲存失敗。"), objResult.成功 ? "success" : "error");
+    顯示區塊訊息("msgLeaderList", objResult.訊息 || (objResult.成功 ? "已修改。" : "修改失敗。"), objResult.成功 ? "success" : "error");
     if (objResult.成功) { await 載入組長名冊(); }
   } catch (錯誤) {
-    console.error("儲存組長資料時發生未預期錯誤：", 錯誤);
+    console.error("修改組長資料時發生未預期錯誤：", 錯誤);
     顯示區塊訊息("msgLeaderList", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
   }
 }
 
-/** 版本 v1.0：刪除某一列組長資料 */
-async function 處理刪除組長按鈕點擊(int列號) {
+/**
+ * ------------------------------------------------------------
+ * 函式：處理刪除組長按鈕點擊
+ * 版本：v1.0（2026-09-21）
+ * 用途：刪除 g_目前選擇組長列號 記住的那一列。跟「修改」一樣，
+ *       只能用在「選組別時已經自動帶出資料」的既有列。
+ * ------------------------------------------------------------
+ */
+async function 處理刪除組長按鈕點擊() {
+  if (!g_目前選擇組長列號) {
+    顯示區塊訊息("msgLeaderList", "這個組別目前還沒有登錄過組長資料，沒有可以刪除的項目。", "error");
+    return;
+  }
+
   const bool確認 = window.confirm("確定要刪除這位組長的登錄資料嗎？刪除後這個 Email 就無法再登入「組長線上填寫提報名單」。");
   if (!bool確認) { return; }
 
   顯示區塊訊息("msgLeaderList", "刪除中，請稍候...", "info");
   try {
-    const objResult = await 呼叫提報API("刪除組長", { 列號: int列號 });
+    const objResult = await 呼叫提報API("刪除組長", { 列號: g_目前選擇組長列號 });
     顯示區塊訊息("msgLeaderList", objResult.訊息 || (objResult.成功 ? "已刪除。" : "刪除失敗。"), objResult.成功 ? "success" : "error");
-    if (objResult.成功) { await 載入組長名冊(); }
+    if (objResult.成功) {
+      document.getElementById("inputNewLeaderName").value = "";
+      document.getElementById("inputNewLeaderEmail").value = "";
+      g_目前選擇組長列號 = null;
+      await 載入組長名冊();
+    }
   } catch (錯誤) {
     console.error("刪除組長資料時發生未預期錯誤：", 錯誤);
     顯示區塊訊息("msgLeaderList", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
