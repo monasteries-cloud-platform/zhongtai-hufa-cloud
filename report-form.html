@@ -9,8 +9,14 @@
   /*
    * ============================================================
    * 檔案：組長線上填寫提報名單網頁表單
-   * 版本：v1.1（2026-09-21）
+   * 版本：v1.2（2026-09-21）
    * 版本歷程：
+   *   - v1.2（2026-09-21，法師實測後訪談決議）：「新聘任職事」欄位
+   *     從自由輸入文字改成下拉選單，選項＝本組別在主資料庫「職務
+   *     清單」裡的所有職稱（對應後端新增的「組長查詢職稱清單」
+   *     action），避免組長打錯職稱字樣跟系統既有職稱對不起來；若
+   *     某一列目前的值不在清單裡（舊資料或職務清單後來調整過），
+   *     仍保留該值當作選項之一，不會被選單重置成空白。
    *   - v1.1（2026-09-21，法師實測後訪談決議）：既有列（有列ID，
    *     匯入時就存在的資料）的「學員編號／姓名／法名／性別／原任
    *     職稱」五欄一律鎖定唯讀，避免組長誤改身分資料；「續聘／
@@ -78,6 +84,10 @@
     border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
   }
   td input[type=checkbox] { transform: scale(1.2); }
+  td select {
+    width: 100%; box-sizing: border-box; padding: 5px 6px;
+    border: 1px solid #ccc; border-radius: 4px; font-size: 13px; background: #fff;
+  }
 
   .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
   button.action {
@@ -312,6 +322,37 @@ function 處理登出按鈕點擊() {
 
 var arr目前名單 = [];   // 畫面上目前的名單資料（含既有列的列ID，新增列沒有列ID）
 var int新增列流水號 = 0; // 純前端用的暫時識別碼，區分畫面上哪幾列是「這次新增、還沒有列ID」的
+var g_職稱清單快取 = []; // 「新聘任職事」下拉選單選項（本組別的職稱清單，2026-09-21 新增）
+
+/**
+ * ------------------------------------------------------------
+ * 函式：組出職稱下拉選單HTML
+ * 版本：v1.0（2026-09-21）
+ * 用途：「新聘任職事」欄位從自由輸入文字改成下拉選單，選項固定
+ *       抓 g_職稱清單快取（本組別在「職務清單」裡的職稱）。若這一
+ *       列目前的值不在清單裡（例如舊資料、或職務清單後來調整過），
+ *       仍把目前的值加進選項最前面，避免資料被選單重置成空白。
+ * 參數：
+ *   strId    - 這個 <select> 的 element id
+ *   str目前值 - 這一列目前的「新聘任職事」值
+ *   str唯讀屬性 - 唯讀時傳 " disabled"，否則傳空字串
+ * 回傳：str HTML
+ * ------------------------------------------------------------
+ */
+function 組出職稱下拉選單HTML(strId, str目前值, str唯讀屬性) {
+  var arr選項 = g_職稱清單快取.slice();
+  if (str目前值 && arr選項.indexOf(str目前值) === -1) {
+    arr選項.unshift(str目前值); // 保留舊資料或清單外的值，不讓它憑空消失
+  }
+
+  var strHTML = "<select id='" + strId + "'" + str唯讀屬性 + ">";
+  strHTML += "<option value=''" + (str目前值 ? "" : " selected") + "></option>";
+  arr選項.forEach(function (str職稱) {
+    strHTML += "<option value='" + 轉義HTML(str職稱) + "'" + (str職稱 === str目前值 ? " selected" : "") + ">" + 轉義HTML(str職稱) + "</option>";
+  });
+  strHTML += "</select>";
+  return strHTML;
+}
 
 /**
  * ------------------------------------------------------------
@@ -348,7 +389,7 @@ function 組出名單表格HTML(bool是否唯讀) {
       "<td><input type='text' id='rowField_" + int索引 + "_性別' value='" + 轉義HTML(obj一筆.性別) + "' style='width:44px;'" + str核心欄位唯讀屬性 + "></td>" +
       "<td><input type='text' id='rowField_" + int索引 + "_原任職稱' value='" + 轉義HTML(obj一筆.原任職稱) + "'" + str核心欄位唯讀屬性 + "></td>" +
       "<td style='text-align:center;'><input type='checkbox' id='rowField_" + int索引 + "_續聘'" + (obj一筆["續聘（打勾）"] ? " checked" : "") + str可改欄位唯讀屬性 + "></td>" +
-      "<td><input type='text' id='rowField_" + int索引 + "_新聘任職事' value='" + 轉義HTML(obj一筆.新聘任職事) + "'" + str可改欄位唯讀屬性 + "></td>" +
+      "<td>" + 組出職稱下拉選單HTML("rowField_" + int索引 + "_新聘任職事", obj一筆.新聘任職事, str可改欄位唯讀屬性) + "</td>" +
       "<td><input type='text' id='rowField_" + int索引 + "_備註' value='" + 轉義HTML(obj一筆.備註) + "'" + str可改欄位唯讀屬性 + "></td>" +
       (bool是否唯讀 ? "" : "<td><button class='danger' onclick='處理刪除一列點擊(" + int索引 + ")'>刪除</button></td>") +
       "</tr>";
@@ -456,6 +497,16 @@ async function 顯示表單畫面() {
     const obj登入資訊 = 取得目前登入組長資訊();
     document.getElementById("groupNameShow").textContent = obj登入資訊.組別;
     document.getElementById("leaderNameShow").textContent = obj登入資訊.組長姓名;
+
+    // 「新聘任職事」下拉選單的選項，跟名單一起載入一次，之後渲染表格重複使用，
+    // 不用每渲染一列就呼叫一次後端（2026-09-21 新增）。
+    try {
+      const objTitleResult = await 呼叫組長API("組長查詢職稱清單");
+      g_職稱清單快取 = objTitleResult.成功 ? (objTitleResult.職稱清單 || []) : [];
+    } catch (職稱錯誤) {
+      console.error("載入職稱清單時發生錯誤：", 職稱錯誤);
+      g_職稱清單快取 = [];
+    }
 
     arr目前名單 = objResult.名單.slice();
     const bool截止提報 = !!objResult.截止提報;
