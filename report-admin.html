@@ -10,8 +10,14 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v1.8（2026-09-21）
+   * 版本：v1.9（2026-09-21）
    * 版本歷程：
+   *   - v1.9（2026-09-21，法師建議）：「組長名冊管理」卡片「新增組長」
+   *     表單的「組別」欄位，從自由輸入文字改成下拉選單（資料來源＝
+   *     既有「提報_XX組」分頁名稱，對應後端新增的 執行查詢提報分頁
+   *     組別清單），選好組別後自動帶出該組別在「組長名冊」既有的
+   *     組長姓名，資料組只需要確認姓名、填上 Email 即可，不用再
+   *     自己手動打組別跟姓名，避免打錯字。
    *   - v1.8（2026-09-21，2026-09-20 訪談共識，法師已回覆「共識OK」）：
    *     新增「五、組長名冊管理」卡片，供資料組維護「組長名冊」
    *     （組別／組長姓名／Email）白名單，並提供「截止提報」總開關
@@ -235,6 +241,7 @@
     margin-bottom: 12px;
   }
   .add-leader-row input[type=text] { width: 160px; }
+  .add-leader-row select { width: 160px; padding: 6px; }
 </style>
 </head>
 <body>
@@ -331,8 +338,10 @@
     </div>
 
     <div class="add-leader-row">
-      <input type="text" id="inputNewLeaderGroup" placeholder="組別（例如：機動組）">
-      <input type="text" id="inputNewLeaderName" placeholder="組長姓名（可留空）">
+      <select id="inputNewLeaderGroup" onchange="處理新增組長組別選擇變更()">
+        <option value="">請選擇組別...</option>
+      </select>
+      <input type="text" id="inputNewLeaderName" placeholder="組長姓名（可留空，選組別後會自動帶入）">
       <input type="text" id="inputNewLeaderEmail" placeholder="組長 Google 帳號 Email">
       <button class="action" onclick="處理新增組長按鈕點擊()">＋ 新增組長</button>
     </div>
@@ -1003,6 +1012,10 @@ async function 處理下載核定名單按鈕點擊() {
 
 // ==================== 【卡片五：組長名冊管理】 ====================
 
+// 快取「載入組長名冊」最近一次拿到的資料，供「選擇組別後自動帶出組長姓名」查找用，
+// 不用每次選擇組別都重新呼叫後端 API（2026-09-21 新增）。
+var g_組長名冊快取 = [];
+
 /**
  * ------------------------------------------------------------
  * 函式：組出組長名冊表格HTML
@@ -1045,24 +1058,81 @@ async function 載入組長名冊() {
   try {
     const objResult = await 呼叫提報API("查詢組長名冊");
     if (objResult.成功) {
+      g_組長名冊快取 = objResult.組長名冊 || [];
       elArea.innerHTML = 組出組長名冊表格HTML(objResult.組長名冊);
     } else {
+      g_組長名冊快取 = [];
       elArea.innerHTML = "<div class='empty-hint'>載入失敗：" + 轉義HTML(objResult.訊息 || "未知錯誤") + "</div>";
     }
   } catch (錯誤) {
     console.error("載入組長名冊時發生錯誤：", 錯誤);
+    g_組長名冊快取 = [];
     elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
   }
 }
 
-/** 版本 v1.0：新增組長 */
+/**
+ * ------------------------------------------------------------
+ * 函式：載入可選組別清單
+ * 版本：v1.0（2026-09-21）
+ * 用途：把「新增組長」表單的「組別」欄位，從自由輸入改成下拉選單，
+ *       選項固定抓「提報_XX組」既有分頁名稱（後端 執行查詢提報分頁
+ *       組別清單），避免資料組手動打字打錯、跟分頁名稱對不起來。
+ * ------------------------------------------------------------
+ */
+async function 載入可選組別清單() {
+  const elSelect = document.getElementById("inputNewLeaderGroup");
+  try {
+    const objResult = await 呼叫提報API("查詢提報分頁組別清單");
+    if (!objResult.成功) {
+      顯示區塊訊息("msgLeaderList", "載入組別清單失敗：" + (objResult.訊息 || "未知錯誤"), "error");
+      return;
+    }
+    var strOptionsHTML = "<option value=''>請選擇組別...</option>";
+    (objResult.組別清單 || []).forEach(function (str組別) {
+      strOptionsHTML += "<option value='" + 轉義HTML(str組別) + "'>" + 轉義HTML(str組別) + "</option>";
+    });
+    elSelect.innerHTML = strOptionsHTML;
+  } catch (錯誤) {
+    console.error("載入可選組別清單時發生錯誤：", 錯誤);
+    顯示區塊訊息("msgLeaderList", "載入組別清單時發生未預期錯誤，請重新整理頁面再試一次。", "error");
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理新增組長組別選擇變更
+ * 版本：v1.0（2026-09-21）
+ * 用途：資料組在「新增組長」選好組別後，自動帶出該組別在「組長
+ *       名冊」裡既有的組長姓名（例如上一期匯入提報名單時，系統已經
+ *       自動寫入的組長姓名），資料組不用再手動打字，只要確認姓名、
+ *       填上 Email 即可。若該組別在名冊裡還沒有任何資料（全新組別），
+ *       姓名欄位維持空白，交由資料組自行輸入。同一組別若名冊中有
+ *       多筆（例如一位組長身兼多組、或有共同組長的情況），採用第一筆
+ *       符合的姓名，資料組仍可自行修改。
+ * ------------------------------------------------------------
+ */
+function 處理新增組長組別選擇變更() {
+  const str組別 = document.getElementById("inputNewLeaderGroup").value;
+  const elName = document.getElementById("inputNewLeaderName");
+
+  if (!str組別) {
+    elName.value = "";
+    return;
+  }
+
+  const obj符合項目 = g_組長名冊快取.find(function (obj一筆) { return obj一筆.組別 === str組別; });
+  elName.value = obj符合項目 ? obj符合項目.組長姓名 : "";
+}
+
+/** 版本 v1.1：新增組長（2026-09-21：組別改為下拉選單，新增後連同組別清單一併重設） */
 async function 處理新增組長按鈕點擊() {
   const str組別 = document.getElementById("inputNewLeaderGroup").value.trim();
   const str組長姓名 = document.getElementById("inputNewLeaderName").value.trim();
   const strEmail = document.getElementById("inputNewLeaderEmail").value.trim();
 
   if (!str組別 || !strEmail) {
-    顯示區塊訊息("msgLeaderList", "請至少填寫「組別」與「Email」。", "error");
+    顯示區塊訊息("msgLeaderList", "請至少選擇「組別」並填寫「Email」。", "error");
     return;
   }
 
@@ -1219,6 +1289,7 @@ async function 初始化頁面() {
   // 等資料組另外按「顯示」（2026-09-21 新增）。
   顯示組長表單網址();
   載入組長名冊();
+  載入可選組別清單();
   載入截止提報狀態();
 }
 
