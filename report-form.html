@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>護法會雲端系統 - 組長線上填寫提報名單</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  /*
+   * ============================================================
+   * 檔案：組長線上填寫提報名單網頁表單
+   * 版本：v1.0（2026-09-21）
+   * 說明：
+   *   2026-09-20 訪談 11 點共識（法師已於 2026-09-21 回覆「共識OK」）
+   *   的前端實作。組長本人用 Google 帳號登入後，直接檢視／新增／
+   *   修改／刪除自己組別的提報名單，送出後直接寫回「提報_XX組」
+   *   分頁，取代原本紙本／群組訊息＋資料組謄打的流程。
+   *
+   *   使用方式：資料組在「提報名單資料組操作」頁面的「組長名冊
+   *   管理」卡片，把本頁面網址加上 ?temple=精舍代碼 分享給組長
+   *   （例如 report-form.html?temple=TEST），組長不需要另外知道
+   *   精舍代碼或密碼，只要用自己在「組長名冊」登錄過的 Google
+   *   帳號登入即可。
+   *
+   *   跟其他頁面的差異：本頁面不使用 config.js 的「精舍登入」
+   *   （token/密碼）機制，而是走 system:"組長" 的 Google 登入
+   *   （詳見 提報系統_04_組長作業.gs），登入狀態存在
+   *   sessionStorage 的獨立 key，跟資料組登入互不影響（同一台
+   *   裝置上，組長跟資料組可以是不同人分別登入不同頁面）。
+   * ============================================================
+   */
+  body {
+    font-family: "微軟正黑體", "PMingLiU", sans-serif;
+    background: #f4f6f9;
+    color: #222;
+    margin: 0;
+    padding: 24px 16px 60px 16px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  .box {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    padding: 28px 30px;
+  }
+  h1 { font-size: 19px; color: #1F3864; margin: 0 0 6px 0; }
+  .sub { color: #666; font-size: 13px; margin-bottom: 20px; }
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 18px; flex-wrap: wrap; gap: 10px;
+  }
+  .topbar .group-name { color: #2E5395; font-weight: bold; }
+  .topbar button {
+    background: #888; color: #fff; border: none; border-radius: 6px;
+    padding: 6px 14px; cursor: pointer; font-size: 13px;
+  }
+  .topbar button:hover { background: #555; }
+
+  .closed-banner {
+    background: #fff3cd; color: #7a5b00; border: 1px solid #ffe08a;
+    border-radius: 8px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 16px;
+  }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  th, td { border: 1px solid #e0e0e0; padding: 6px 8px; text-align: left; }
+  th { background: #f0f3f8; color: #333; }
+  td input[type=text] {
+    width: 100%; box-sizing: border-box; padding: 5px 6px;
+    border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
+  }
+  td input[type=checkbox] { transform: scale(1.2); }
+
+  .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  button.action {
+    padding: 9px 18px; background: #2E5395; color: #fff; border: none;
+    border-radius: 6px; font-size: 14px; cursor: pointer;
+  }
+  button.action:disabled { background: #99a8c2; cursor: not-allowed; }
+  button.action:hover:not(:disabled) { background: #1F3864; }
+  button.secondary { background: #6c757d; }
+  button.secondary:hover:not(:disabled) { background: #52585d; }
+  button.danger { background: #b3372c; color: #fff; border: none; border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12.5px; }
+  button.danger:hover { background: #8a2a21; }
+
+  .msg { margin-top: 12px; font-size: 13px; min-height: 18px; white-space: pre-line; }
+  .msg.error { color: #c00; }
+  .msg.success { color: #1a7f37; }
+  .msg.info { color: #666; }
+
+  #loginArea { text-align: center; padding: 20px 0; }
+  #groupSelectArea { text-align: center; padding: 10px 0; }
+  #groupSelectArea button {
+    margin: 6px; padding: 8px 16px; background: #2E5395; color: #fff;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  #groupSelectArea button:hover { background: #1F3864; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="box">
+    <h1>組長線上填寫提報名單</h1>
+    <div class="sub">請用您登錄在「組長名冊」中的 Google 帳號登入，即可檢視、修改本組本期的提報名單。</div>
+
+    <!-- 尚未登入：Google 登入畫面 -->
+    <div id="loginArea">
+      <div id="googleSignInButton"></div>
+      <div class="msg" id="msgLogin"></div>
+    </div>
+
+    <!-- 已用 Google 帳號驗證通過，但身兼多組別，需要選一組 -->
+    <div id="groupSelectArea" style="display:none;">
+      <div class="sub">您登錄了多個組別，請選擇本次要填寫的組別：</div>
+      <div id="groupSelectButtons"></div>
+    </div>
+
+    <!-- 已登入，正式作業畫面 -->
+    <div id="formArea" style="display:none;">
+      <div class="topbar">
+        <div>目前組別：<span class="group-name" id="groupNameShow"></span>（<span id="leaderNameShow"></span>）</div>
+        <button onclick="處理登出按鈕點擊()">登出</button>
+      </div>
+
+      <div class="closed-banner" id="closedBanner" style="display:none;">
+        本期提報已截止，目前僅供檢視，如需異動請直接聯絡資料組協助處理。
+      </div>
+
+      <div id="tableArea"></div>
+
+      <div class="btn-row">
+        <button class="action secondary" id="btnAddRow" onclick="處理新增一列按鈕點擊()">＋ 新增一列</button>
+        <button class="action" id="btnSubmit" onclick="處理送出名單按鈕點擊()">送出名單</button>
+      </div>
+      <div class="msg" id="msgForm"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+
+// ==================== 【組長登入狀態（獨立於資料組登入，key 不同）】 ====================
+
+const SESSION_KEY_組長TOKEN = "護法會雲端系統_組長token";
+const SESSION_KEY_組長組別 = "護法會雲端系統_組長組別";
+const SESSION_KEY_組長姓名 = "護法會雲端系統_組長姓名";
+
+function 取得目前登入組長資訊() {
+  const strToken = sessionStorage.getItem(SESSION_KEY_組長TOKEN);
+  if (!strToken) { return null; }
+  return {
+    token: strToken,
+    組別: sessionStorage.getItem(SESSION_KEY_組長組別) || "",
+    組長姓名: sessionStorage.getItem(SESSION_KEY_組長姓名) || ""
+  };
+}
+
+function 儲存登入組長資訊(strToken, str組別, str組長姓名) {
+  sessionStorage.setItem(SESSION_KEY_組長TOKEN, strToken);
+  sessionStorage.setItem(SESSION_KEY_組長組別, str組別 || "");
+  sessionStorage.setItem(SESSION_KEY_組長姓名, str組長姓名 || "");
+}
+
+function 清除登入組長資訊() {
+  sessionStorage.removeItem(SESSION_KEY_組長TOKEN);
+  sessionStorage.removeItem(SESSION_KEY_組長組別);
+  sessionStorage.removeItem(SESSION_KEY_組長姓名);
+}
+
+function 取得網址精舍代碼() {
+  const urlParams = new URLSearchParams(window.location.search);
+  return (urlParams.get("temple") || "").trim();
+}
+
+
+// ==================== 【共用小工具】 ====================
+
+function 顯示區塊訊息(strMsgElementId, str訊息內容, str樣式) {
+  const elMsg = document.getElementById(strMsgElementId);
+  elMsg.textContent = str訊息內容;
+  elMsg.className = "msg " + str樣式;
+}
+
+function 轉義HTML(str原始文字) {
+  if (str原始文字 === undefined || str原始文字 === null) return "";
+  const div = document.createElement("div");
+  div.textContent = String(str原始文字);
+  return div.innerHTML;
+}
+
+async function 呼叫組長API(str動作, obj額外參數, boolSkipToken) {
+  const obj請求內容 = Object.assign({ system: "組長", action: str動作 }, obj額外參數 || {});
+  if (!boolSkipToken) {
+    const obj登入資訊 = 取得目前登入組長資訊();
+    if (!obj登入資訊) {
+      顯示登入畫面();
+      return { 成功: false, 訊息: "登入狀態已失效，請重新登入。" };
+    }
+    obj請求內容.token = obj登入資訊.token;
+  }
+  return await 呼叫後端API(obj請求內容);
+}
+
+
+// ==================== 【Google 登入】 ====================
+
+var str暫存精舍代碼 = "";
+
+function 初始化Google登入() {
+  str暫存精舍代碼 = 取得網址精舍代碼();
+  if (!str暫存精舍代碼) {
+    顯示區塊訊息("msgLogin", "網址缺少精舍代碼（temple 參數），請聯絡資料組確認連結是否正確（例如：...report-form.html?temple=精舍代碼）。", "error");
+    return;
+  }
+  if (!GOOGLE_CLIENT_ID_前端 || GOOGLE_CLIENT_ID_前端 === "請填入GoogleOAuthClientId") {
+    顯示區塊訊息("msgLogin", "系統尚未完成 Google 登入設定，請聯絡工程人員先申請並填入 Google OAuth Client ID。", "error");
+    return;
+  }
+  if (typeof google === "undefined" || !google.accounts) {
+    顯示區塊訊息("msgLogin", "Google 登入元件載入失敗，請確認網路連線後重新整理頁面。", "error");
+    return;
+  }
+
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID_前端,
+    callback: 處理Google登入回呼
+  });
+  google.accounts.id.renderButton(document.getElementById("googleSignInButton"), {
+    theme: "outline", size: "large", text: "signin_with", locale: "zh-TW"
+  });
+}
+
+async function 處理Google登入回呼(objGoogleResponse) {
+  顯示區塊訊息("msgLogin", "驗證中，請稍候...", "info");
+  try {
+    const objResult = await 呼叫組長API("組長Google登入", {
+      精舍代碼: str暫存精舍代碼,
+      idToken: objGoogleResponse.credential
+    }, true);
+
+    if (!objResult.成功) {
+      顯示區塊訊息("msgLogin", objResult.訊息 || "登入失敗，請重新嘗試。", "error");
+      return;
+    }
+
+    if (objResult.需選擇組別) {
+      顯示選組別畫面(objResult.預備token, objResult.組別清單);
+      return;
+    }
+
+    儲存登入組長資訊(objResult.token, objResult.組別, objResult.組長姓名);
+    await 顯示表單畫面();
+  } catch (錯誤) {
+    console.error("Google 登入時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgLogin", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  }
+}
+
+function 顯示選組別畫面(str預備token, arr組別清單) {
+  document.getElementById("loginArea").style.display = "none";
+  document.getElementById("groupSelectArea").style.display = "block";
+  const elButtons = document.getElementById("groupSelectButtons");
+  elButtons.innerHTML = "";
+  arr組別清單.forEach(function (str組別) {
+    const btn = document.createElement("button");
+    btn.textContent = str組別;
+    btn.onclick = function () { 處理選擇組別點擊(str預備token, str組別); };
+    elButtons.appendChild(btn);
+  });
+}
+
+async function 處理選擇組別點擊(str預備token, str組別) {
+  try {
+    const objResult = await 呼叫組長API("組長選擇組別", { 預備token: str預備token, 組別: str組別 }, true);
+    if (!objResult.成功) {
+      window.alert(objResult.訊息 || "選擇組別失敗，請重新登入一次。");
+      顯示登入畫面();
+      return;
+    }
+    儲存登入組長資訊(objResult.token, objResult.組別, objResult.組長姓名);
+    await 顯示表單畫面();
+  } catch (錯誤) {
+    console.error("選擇組別時發生未預期錯誤：", 錯誤);
+    window.alert("系統發生未預期錯誤，請稍後再試或聯絡工程人員。");
+  }
+}
+
+function 顯示登入畫面() {
+  清除登入組長資訊();
+  document.getElementById("loginArea").style.display = "block";
+  document.getElementById("groupSelectArea").style.display = "none";
+  document.getElementById("formArea").style.display = "none";
+}
+
+function 處理登出按鈕點擊() {
+  顯示登入畫面();
+}
+
+
+// ==================== 【名單表單】 ====================
+
+var arr目前名單 = [];   // 畫面上目前的名單資料（含既有列的列ID，新增列沒有列ID）
+var int新增列流水號 = 0; // 純前端用的暫時識別碼，區分畫面上哪幾列是「這次新增、還沒有列ID」的
+
+function 組出名單表格HTML(bool是否唯讀) {
+  var strHTML = "<table><thead><tr>" +
+    "<th>學員編號</th><th>姓名</th><th>法名</th><th>性別</th><th>原任職稱</th>" +
+    "<th>續聘</th><th>新聘任職事</th><th>備註</th>" + (bool是否唯讀 ? "" : "<th>刪除</th>") +
+    "</tr></thead><tbody>";
+
+  arr目前名單.forEach(function (obj一筆, int索引) {
+    var str唯讀屬性 = bool是否唯讀 ? " disabled" : "";
+    strHTML += "<tr data-row-index='" + int索引 + "'>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_學員編號' value='" + 轉義HTML(obj一筆.學員編號) + "'" + str唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_姓名' value='" + 轉義HTML(obj一筆.姓名) + "'" + str唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_法名' value='" + 轉義HTML(obj一筆.法名) + "'" + str唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_性別' value='" + 轉義HTML(obj一筆.性別) + "' style='width:44px;'" + str唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_原任職稱' value='" + 轉義HTML(obj一筆.原任職稱) + "'" + str唯讀屬性 + "></td>" +
+      "<td style='text-align:center;'><input type='checkbox' id='rowField_" + int索引 + "_續聘'" + (obj一筆["續聘（打勾）"] ? " checked" : "") + str唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_新聘任職事' value='" + 轉義HTML(obj一筆.新聘任職事) + "'" + str唯讀屬性 + "></td>" +
+      "<td><input type='text' id='rowField_" + int索引 + "_備註' value='" + 轉義HTML(obj一筆.備註) + "'" + str唯讀屬性 + "></td>" +
+      (bool是否唯讀 ? "" : "<td><button class='danger' onclick='處理刪除一列點擊(" + int索引 + ")'>刪除</button></td>") +
+      "</tr>";
+  });
+
+  strHTML += "</tbody></table>";
+  if (arr目前名單.length === 0) {
+    strHTML += "<div style='color:#999; font-size:13px; padding:8px 0;'>目前沒有任何資料，請按「＋ 新增一列」開始填寫。</div>";
+  }
+  return strHTML;
+}
+
+function 重新渲染表格(bool是否唯讀) {
+  document.getElementById("tableArea").innerHTML = 組出名單表格HTML(bool是否唯讀);
+}
+
+function 處理新增一列按鈕點擊() {
+  int新增列流水號 = int新增列流水號 + 1;
+  arr目前名單.push({
+    _新增列流水號: int新增列流水號,
+    學員編號: "", 姓名: "", 法名: "", 性別: "", 原任職稱: "",
+    "續聘（打勾）": false, 新聘任職事: "", 備註: ""
+  });
+  重新渲染表格(false);
+}
+
+function 處理刪除一列點擊(int索引) {
+  const bool確認 = window.confirm("確定要刪除這一列嗎？送出名單後這位學員就會從貴組提報名單中移除。");
+  if (!bool確認) { return; }
+  arr目前名單.splice(int索引, 1);
+  重新渲染表格(false);
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：從畫面收集目前名單
+ * 版本：v1.0（2026-09-21）
+ * 用途：送出前，把畫面上每一列輸入框的最新值讀回 arr目前名單，
+ *       避免只送出「載入當下」的舊資料。
+ * ------------------------------------------------------------
+ */
+function 從畫面收集目前名單() {
+  arr目前名單.forEach(function (obj一筆, int索引) {
+    var elPrefix = "rowField_" + int索引 + "_";
+    var el學員編號 = document.getElementById(elPrefix + "學員編號");
+    if (!el學員編號) { return; } // 唯讀畫面沒有輸入框可收集，直接跳過
+    obj一筆.學員編號 = el學員編號.value.trim();
+    obj一筆.姓名 = document.getElementById(elPrefix + "姓名").value.trim();
+    obj一筆.法名 = document.getElementById(elPrefix + "法名").value.trim();
+    obj一筆.性別 = document.getElementById(elPrefix + "性別").value.trim();
+    obj一筆.原任職稱 = document.getElementById(elPrefix + "原任職稱").value.trim();
+    obj一筆["續聘（打勾）"] = document.getElementById(elPrefix + "續聘").checked;
+    obj一筆.新聘任職事 = document.getElementById(elPrefix + "新聘任職事").value.trim();
+    obj一筆.備註 = document.getElementById(elPrefix + "備註").value.trim();
+  });
+}
+
+async function 處理送出名單按鈕點擊() {
+  從畫面收集目前名單();
+
+  var arr送出資料 = arr目前名單
+    .filter(function (obj一筆) { return obj一筆.學員編號 || obj一筆.姓名; })
+    .map(function (obj一筆) {
+      var obj送出 = {
+        學員編號: obj一筆.學員編號, 姓名: obj一筆.姓名, 法名: obj一筆.法名, 性別: obj一筆.性別,
+        原任職稱: obj一筆.原任職稱, 續聘: obj一筆["續聘（打勾）"], 新聘任職事: obj一筆.新聘任職事, 備註: obj一筆.備註
+      };
+      if (obj一筆.列ID !== undefined && obj一筆.列ID !== "" && obj一筆.列ID !== null) {
+        obj送出.列ID = obj一筆.列ID;
+      }
+      return obj送出;
+    });
+
+  const btn = document.getElementById("btnSubmit");
+  btn.disabled = true;
+  顯示區塊訊息("msgForm", "送出中，請稍候...", "info");
+
+  try {
+    const objResult = await 呼叫組長API("組長儲存名單", { 名單: arr送出資料 });
+    顯示區塊訊息("msgForm", objResult.訊息 || (objResult.成功 ? "送出成功。" : "送出失敗。"), objResult.成功 ? "success" : "error");
+    if (objResult.成功) {
+      await 顯示表單畫面();
+    }
+  } catch (錯誤) {
+    console.error("送出名單時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgForm", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function 顯示表單畫面() {
+  document.getElementById("loginArea").style.display = "none";
+  document.getElementById("groupSelectArea").style.display = "none";
+  document.getElementById("formArea").style.display = "block";
+  顯示區塊訊息("msgForm", "載入中，請稍候...", "info");
+
+  try {
+    const objResult = await 呼叫組長API("組長查詢名單");
+    if (!objResult.成功) {
+      顯示區塊訊息("msgForm", objResult.訊息 || "載入名單失敗。", "error");
+      return;
+    }
+
+    const obj登入資訊 = 取得目前登入組長資訊();
+    document.getElementById("groupNameShow").textContent = obj登入資訊.組別;
+    document.getElementById("leaderNameShow").textContent = obj登入資訊.組長姓名;
+
+    arr目前名單 = objResult.名單.slice();
+    const bool截止提報 = !!objResult.截止提報;
+    document.getElementById("closedBanner").style.display = bool截止提報 ? "block" : "none";
+    document.getElementById("btnAddRow").style.display = bool截止提報 ? "none" : "inline-block";
+    document.getElementById("btnSubmit").style.display = bool截止提報 ? "none" : "inline-block";
+
+    重新渲染表格(bool截止提報);
+    顯示區塊訊息("msgForm", "", "info");
+  } catch (錯誤) {
+    console.error("載入名單時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgForm", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  }
+}
+
+
+// ==================== 【頁面初始化】 ====================
+
+(async function 初始化頁面() {
+  const obj登入資訊 = 取得目前登入組長資訊();
+  if (obj登入資訊) {
+    await 顯示表單畫面();
+  } else {
+    初始化Google登入();
+  }
+})();
+
+</script>
+
+</body>
+</html>
