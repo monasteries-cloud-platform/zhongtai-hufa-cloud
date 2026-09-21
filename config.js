@@ -1,8 +1,12 @@
 /**
  * ============================================================
  * 檔案：共用設定檔
- * 版本：v1.1（2026-09-18）
+ * 版本：v1.2（2026-09-21）
  * 版本歷程：
+ *   - v1.2（2026-09-21）：GOOGLE_CLIENT_ID_前端 由待填佔位文字改填
+ *     正式申請完成的 Google OAuth Client ID（供「組長線上填寫提報
+ *     名單網頁表單」report-form.html 的 Google 登入元件使用），
+ *     其餘內容未變動。
  *   - v1.1（2026-09-18）：`呼叫後端API()` 新增「連線失敗自動重試
  *     一次」機制，改善 Apps Script Web App 閒置後第一次呼叫偶爾
  *     連線失敗的現象（詳見該函式的變更說明）。
@@ -18,13 +22,11 @@
 // 部署 Apps Script Web App 後拿到的網址（2026-09-19 填入正式部署網址）
 const WEB_APP_網址 = "https://script.google.com/macros/s/AKfycby5gQrRgR4rXzW9BSnmJ7_-jOvqb1OunMSquHiq0xQTsxuBWY0Y6BftEQYRpTeAHi8g/exec";
 
-// 【待辦，2026-09-21】「組長線上填寫提報名單網頁表單」（report-form.html）需要的
-// Google OAuth Client ID（前端 Google Identity Services 登入元件用），要跟後端
-// Script Properties 的 GOOGLE_CLIENT_ID 設成同一組值。目前尚未在 Google Cloud
-// Console 申請，先用佔位文字，申請完成後把下面這行改成實際的 Client ID 字串
-// （格式類似「1234567890-abcdefg.apps.googleusercontent.com」）即可生效，
-// 不需要改動其他程式碼。
-const GOOGLE_CLIENT_ID_前端 = "請填入GoogleOAuthClientId";
+// 「組長線上填寫提報名單網頁表單」（report-form.html）Google 登入元件用的
+// Google OAuth Client ID，2026-09-21 於 Google Cloud 專案 hufa-cloud-system 申請完成。
+// 這一組值必須跟後端 Script Properties 的 GOOGLE_CLIENT_ID 設成完全一樣，
+// 否則後端 驗證GoogleIdToken() 比對 aud 欄位時會判定為無效 token。
+const GOOGLE_CLIENT_ID_前端 = "1097675230838-338d9rf5b55eqkr9pp58o1da7kuehsgf.apps.googleusercontent.com";
 
 // 精舍登入後，token 存在瀏覽器 sessionStorage 時使用的 key 名稱，統一集中管理避免打錯字
 const SESSION_KEY_精舍TOKEN = "護法會雲端系統_精舍token";
