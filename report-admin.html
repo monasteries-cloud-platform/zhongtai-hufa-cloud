@@ -10,8 +10,14 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v1.11（2026-09-21）
+   * 版本：v1.12（2026-09-22）
    * 版本歷程：
+   *   - v1.12（2026-09-22，「報到系統輸出」功能，2026-09-21～22
+   *     訪談決議）：卡片四「產出核定名單」新增「輸出至報到系統」
+   *     子區塊（場次代碼／場次名稱輸入欄＋按鈕），資料組可以把
+   *     目前的核定名單一鍵送到報到系統，變成一個可以現場報到的
+   *     場次；場次代碼已存在時會先跳出瀏覽器確認視窗二次確認，
+   *     若該場次已經有人報到過，後端會直接拒絕（訊息原樣顯示）。
    *   - v1.11（2026-09-21，法師建議）：「組長名冊管理」卡片，選好
    *     「組別」後，若這個組別有 2 位以上既有組長（多位共同組長），
    *     「組長姓名」欄位自動從文字輸入框變成下拉選單，列出每一位
@@ -336,6 +342,14 @@
     <div id="approvedListArea" style="margin-top:14px;">
       <div class="empty-hint">尚未載入核定名單。</div>
     </div>
+
+    <div class="desc" style="margin-top:16px;">把目前的核定名單輸出到報到系統，變成一個可以現場報到的場次。若身兼多組職務的學員在核定名單中重複多筆，只會輸出一列，其餘身兼組別會合併寫在「注意事項」欄位。場次代碼若已存在，需二次確認後才會用最新核定名單覆蓋；若該場次已經有人報到過，系統會直接拒絕輸出。</div>
+    <div class="step-row" style="margin-top:10px;">
+      <input type="text" id="inputExportSessionCode" placeholder="場次代碼（例如 1025）" style="max-width:160px;">
+      <input type="text" id="inputExportSessionName" placeholder="場次名稱（新建立場次時必填）" style="max-width:220px;">
+      <button class="action secondary" id="btnExportToCheckin" onclick="處理輸出核定名單至報到系統按鈕點擊()">輸出至報到系統</button>
+    </div>
+    <div class="msg" id="msgExportToCheckin"></div>
   </div>
 
   <!-- 卡片五：組長名冊管理（2026-09-21 新增） -->
@@ -1021,6 +1035,63 @@ async function 處理下載核定名單按鈕點擊() {
   } catch (錯誤) {
     console.error("下載核定名單時發生未預期錯誤：", 錯誤);
     window.alert("下載時發生未預期錯誤，請稍後再試或聯絡工程人員。");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理輸出核定名單至報到系統按鈕點擊
+ * 版本：v1.0（2026-09-22，新增，「報到系統輸出」功能，2026-09-21～
+ *       22 訪談決議）
+ * 用途：把目前的核定名單，轉成報到系統可以報到的一個新場次（或
+ *       覆蓋一個尚未有人報到的既有場次）。先以「確認覆蓋:false」
+ *       呼叫一次；若後端回應「需要確認覆蓋」（場次代碼已存在但
+ *       尚無人報到），跳出瀏覽器確認視窗讓資料組二次確認後，才
+ *       帶「確認覆蓋:true」重新呼叫一次；若場次已經有人報到過，
+ *       後端會直接拒絕，這裡把訊息原樣顯示給資料組看，不會跳出
+ *       二次確認視窗。
+ * ------------------------------------------------------------
+ */
+async function 處理輸出核定名單至報到系統按鈕點擊() {
+  const str場次代碼 = document.getElementById("inputExportSessionCode").value.trim();
+  const str場次名稱 = document.getElementById("inputExportSessionName").value.trim();
+
+  if (!str場次代碼) {
+    顯示區塊訊息("msgExportToCheckin", "請先輸入場次代碼。", "error");
+    return;
+  }
+
+  const btn = document.getElementById("btnExportToCheckin");
+  btn.disabled = true;
+  顯示區塊訊息("msgExportToCheckin", "輸出中，請稍候...", "info");
+
+  try {
+    let objResult = await 呼叫提報API("輸出核定名單至報到系統", {
+      場次代碼: str場次代碼,
+      場次名稱: str場次名稱,
+      確認覆蓋: false
+    });
+
+    if (!objResult.成功 && objResult.需要確認覆蓋) {
+      const bool確認 = window.confirm(objResult.訊息 + "\n\n（按「確定」將用最新核定名單覆蓋這個場次的名單）");
+      if (!bool確認) {
+        顯示區塊訊息("msgExportToCheckin", "已取消，未輸出。", "info");
+        return;
+      }
+      顯示區塊訊息("msgExportToCheckin", "輸出中，請稍候...", "info");
+      objResult = await 呼叫提報API("輸出核定名單至報到系統", {
+        場次代碼: str場次代碼,
+        場次名稱: str場次名稱,
+        確認覆蓋: true
+      });
+    }
+
+    顯示區塊訊息("msgExportToCheckin", objResult.訊息 || (objResult.成功 ? "輸出完成。" : "輸出失敗。"), objResult.成功 ? "success" : "error");
+  } catch (錯誤) {
+    console.error("輸出核定名單至報到系統時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgExportToCheckin", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
   } finally {
     btn.disabled = false;
   }
