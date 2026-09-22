@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>清單處理頁</title>
+<!-- SheetJS：供「下載清單」按鈕把畫面資料匯出成 .xlsx 使用 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /*
+   * ============================================================
+   * 檔案：清單處理頁（共用「候選清單」／「待複核清單」／「核定
+   *       名單」三種清單，用網址參數 ?type= 區分）
+   * 版本：v1.0（2026-09-22）
+   * 版本歷程：
+   *   - v1.0（2026-09-22，法師訪談決議：report-admin.html 三個
+   *     內嵌表格「候選清單」「待複核清單」「核定名單」改開另一
+   *     個網頁處理，訪談確認架構為「共用一個清單處理頁，用網址
+   *     參數區分」／「從 report-admin.html 開新分頁（原頁面保
+   *     留）」／「沿用目前登入狀態」／「待複核清單送出決議後停
+   *     留在頁面、清單重新整理繼續處理」）：新增本檔案，把
+   *     report-admin.html 原本卡片二／三／四的表格渲染／載入／
+   *     回填／送出決議函式搬移過來，report-admin.html 對應改成
+   *     用 window.open() 開本頁；核心業務邏輯（呼叫的 action 名
+   *     稱、資料欄位）完全未變動。
+   * 說明：
+   *   本頁不單獨登入，直接沿用 report-admin.html 開啟本頁時
+   *   （window.open 同來源分頁）帶過來的 sessionStorage 登入
+   *   狀態；找不到登入狀態時導回 login.html，跟其他頁面一致。
+   * ============================================================
+   */
+  body {
+    font-family: "微軟正黑體", "PMingLiU", sans-serif;
+    background: #f4f6f9;
+    color: #222;
+    margin: 0;
+    padding: 24px 16px 60px 16px;
+  }
+  .wrap {
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .topbar h1 {
+    font-size: 19px;
+    color: #1F3864;
+    margin: 0;
+  }
+  .topbar .temple-name {
+    color: #2E5395;
+    font-weight: bold;
+  }
+  .topbar-buttons button {
+    background: #888;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-left: 8px;
+  }
+  .topbar-buttons button:hover { background: #555; }
+
+  .card {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    padding: 20px 24px;
+    margin-bottom: 22px;
+  }
+  .card h2 {
+    font-size: 16px;
+    color: #2E5395;
+    margin: 0 0 4px 0;
+    border-bottom: 1px solid #e5e5e5;
+    padding-bottom: 8px;
+  }
+  .card .desc {
+    color: #777;
+    font-size: 12.5px;
+    margin: 8px 0 16px 0;
+    line-height: 1.6;
+    white-space: pre-line;
+  }
+  .step-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  button.action {
+    padding: 9px 18px;
+    background: #2E5395;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button.action:disabled { background: #99a8c2; cursor: not-allowed; }
+  button.action:hover:not(:disabled) { background: #1F3864; }
+  button.secondary { background: #6c757d; }
+  button.secondary:hover:not(:disabled) { background: #52585d; }
+
+  .msg { margin-top: 12px; font-size: 13px; min-height: 18px; white-space: pre-line; }
+  .msg.error { color: #c00; }
+  .msg.success { color: #1a7f37; }
+  .msg.info { color: #666; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 13px;
+  }
+  th, td {
+    border: 1px solid #e0e0e0;
+    padding: 6px 8px;
+    text-align: left;
+  }
+  th {
+    background: #f0f3f8;
+    color: #333;
+  }
+  select, input[type=text] {
+    padding: 4px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box;
+  }
+  .empty-hint {
+    color: #999;
+    font-size: 13px;
+    padding: 10px 0;
+  }
+  .cancel-reason-input { width: 140px; }
+  .backfill-id-input { width: 110px; }
+
+  #loadingNotice {
+    text-align: center;
+    color: #666;
+    padding: 40px 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="loadingNotice">載入中，請稍候...</div>
+
+<div class="wrap" id="mainContent" style="display:none;">
+
+  <div class="topbar">
+    <h1 id="pageTitleShow">清單處理頁　<span class="temple-name" id="templeNameShow"></span></h1>
+    <div class="topbar-buttons">
+      <button onclick="window.close()">關閉本頁</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 id="cardTitleShow"></h2>
+    <div class="desc" id="cardDescShow"></div>
+    <div class="step-row">
+      <button class="action secondary" id="btnRefreshList" onclick="載入清單()">重新整理</button>
+      <button class="action secondary" id="btnDownloadList" onclick="處理下載清單按鈕點擊()">下載清單</button>
+    </div>
+    <div class="msg" id="msgTop"></div>
+
+    <div id="listArea" style="margin-top:14px;">
+      <div class="empty-hint">載入中，請稍候...</div>
+    </div>
+
+    <!-- 只有「待複核清單」（type=pending）會顯示這個按鈕 -->
+    <div class="step-row" id="submitRow" style="margin-top:10px; display:none;">
+      <button class="action" id="btnSubmitDecisions" onclick="處理送出決議按鈕點擊()">送出決議</button>
+    </div>
+    <div class="msg" id="msgBottom"></div>
+  </div>
+
+</div>
+
+<script src="config.js"></script>
+<script>
+
+/**
+ * ------------------------------------------------------------
+ * 各清單類型設定：type=candidates｜pending｜approved
+ * 集中放在這裡，其餘函式一律透過 CONST_清單設定[str清單類型] 取值，
+ * 不要在渲染／載入函式裡各自寫死類型判斷（2026-09-22 新增）。
+ * ------------------------------------------------------------
+ */
+const CONST_清單設定 = {
+  candidates: {
+    標題: "候選清單",
+    說明: "「姓名反查候選清單」：組長只填姓名、沒填學員編號時，系統自動反查比對到的候選名單，核對後在候選學員編號欄位確認並回填。",
+    查詢action: "查詢候選清單",
+    清單欄位: "候選清單",
+    下載欄位設定: [
+      { 鍵值: "來源分頁", 標題: "來源分頁" },
+      { 鍵值: "來源列號", 標題: "來源列號" },
+      { 鍵值: "組長填寫姓名", 標題: "組長填寫姓名" },
+      { 鍵值: "候選學員編號", 標題: "候選學員編號" },
+      { 鍵值: "候選法名", 標題: "候選法名" },
+      { 鍵值: "候選性別", 標題: "候選性別" }
+    ],
+    下載檔名: "候選清單",
+    無資料下載提示: "目前沒有需要人工核對的候選項目，不需要下載。"
+  },
+  pending: {
+    標題: "待複核清單",
+    說明: "依學員編號彙總全體職務數，超過門檻（3張聘書）的人整列標紅、列入本清單，請法師會議逐筆針對「這一筆職務」勾選保留或取消（取消要填原因），選好後按「送出決議」一次送出。",
+    查詢action: "查詢待複核清單",
+    清單欄位: "待複核清單",
+    下載欄位設定: [
+      { 鍵值: "學員編號", 標題: "學員編號" },
+      { 鍵值: "姓名", 標題: "姓名" },
+      { 鍵值: "法名", 標題: "法名" },
+      { 鍵值: "聘書總數（該人）", 標題: "聘書總數（該人）" },
+      { 鍵值: "組別", 標題: "組別" },
+      { 鍵值: "職稱", 標題: "職稱" },
+      { 鍵值: "法師會議決議", 標題: "法師會議決議" },
+      { 鍵值: "取消原因", 標題: "取消原因" }
+    ],
+    下載檔名: "待複核清單",
+    無資料下載提示: "目前沒有超額待複核的項目，不需要下載。"
+  },
+  approved: {
+    標題: "核定名單",
+    說明: "目前已產出的核定名單（唯讀，若要異動請回「提報名單資料組操作」頁重新執行「產出核定名單」）。",
+    查詢action: "查詢核定名單",
+    清單欄位: "核定名單",
+    下載欄位設定: [
+      { 鍵值: "學員編號", 標題: "學員編號" },
+      { 鍵值: "姓名", 標題: "姓名" },
+      { 鍵值: "法名", 標題: "法名" },
+      { 鍵值: "性別", 標題: "性別" },
+      { 鍵值: "組別", 標題: "組別" },
+      { 鍵值: "職稱", 標題: "職稱" }
+    ],
+    下載檔名: "核定名單",
+    無資料下載提示: "目前尚未產出核定名單，不需要下載。"
+  }
+};
+
+var str目前清單類型 = "";
+
+/**
+ * ------------------------------------------------------------
+ * 函式：顯示區塊訊息
+ * ------------------------------------------------------------
+ */
+function 顯示區塊訊息(strMsgElementId, str訊息內容, str樣式) {
+  const elMsg = document.getElementById(strMsgElementId);
+  elMsg.textContent = str訊息內容;
+  elMsg.className = "msg " + str樣式;
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：轉義HTML
+ * ------------------------------------------------------------
+ */
+function 轉義HTML(str原始文字) {
+  if (str原始文字 === undefined || str原始文字 === null) return "";
+  const div = document.createElement("div");
+  div.textContent = String(str原始文字);
+  return div.innerHTML;
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：轉義單引號
+ * ------------------------------------------------------------
+ */
+function 轉義單引號(str原始文字) {
+  return String(str原始文字).replace(/'/g, "\\'");
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：下載清單為Excel
+ * ------------------------------------------------------------
+ */
+function 下載清單為Excel(arr資料, arr欄位設定, str檔名, str找不到資料提示) {
+  if (!arr資料 || arr資料.length === 0) {
+    window.alert(str找不到資料提示 || "目前沒有資料可以下載，請先確認清單內容。");
+    return;
+  }
+  if (typeof XLSX === "undefined") {
+    window.alert("匯出 Excel 的元件載入失敗，請確認網路連線正常後重新整理頁面再試一次。");
+    return;
+  }
+
+  var arrExcel資料 = arr資料.map(function (obj一筆) {
+    var obj一列 = {};
+    arr欄位設定.forEach(function (obj欄位) {
+      obj一列[obj欄位.標題] = obj一筆[obj欄位.鍵值];
+    });
+    return obj一列;
+  });
+
+  var 工作表 = XLSX.utils.json_to_sheet(arrExcel資料, {
+    header: arr欄位設定.map(function (obj欄位) { return obj欄位.標題; })
+  });
+  var 活頁簿 = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(活頁簿, 工作表, "清單");
+  XLSX.writeFile(活頁簿, str檔名 + ".xlsx");
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：呼叫提報API
+ * ------------------------------------------------------------
+ */
+async function 呼叫提報API(str動作, obj額外參數) {
+  const obj登入資訊 = 取得目前登入精舍資訊();
+  if (!obj登入資訊) {
+    window.location.href = "login.html";
+    return { 成功: false, 訊息: "登入狀態已失效，請重新登入。" };
+  }
+
+  const obj請求內容 = Object.assign(
+    { system: "提報", action: str動作, token: obj登入資訊.token },
+    obj額外參數 || {}
+  );
+  return await 呼叫後端API(obj請求內容);
+}
+
+
+// ==================== 【候選清單】 ====================
+
+function 組出候選清單表格HTML(arr候選清單) {
+  if (!arr候選清單 || arr候選清單.length === 0) {
+    return "<div class='empty-hint'>目前沒有需要人工核對的候選項目。</div>";
+  }
+
+  var strHTML = "<table><thead><tr>" +
+    "<th>來源分頁</th><th>來源列號</th><th>組長填寫姓名</th><th>候選學員編號</th><th>候選法名</th><th>候選性別</th><th>確認回填</th>" +
+    "</tr></thead><tbody>";
+
+  arr候選清單.forEach(function (obj一筆, int索引) {
+    var strInputId = "backfillInput_" + int索引;
+    strHTML += "<tr>" +
+      "<td>" + 轉義HTML(obj一筆.來源分頁) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.來源列號) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.組長填寫姓名) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.候選學員編號) + "（" + 轉義HTML(obj一筆.候選法名) + "／" + 轉義HTML(obj一筆.候選性別) + "）</td>" +
+      "<td colspan='2'>" +
+        "<input type='text' class='backfill-id-input' id='" + strInputId + "' placeholder='正確學員編號' value='" +
+        (String(obj一筆.候選學員編號 || "").indexOf("查無同名") === -1 ? 轉義HTML(obj一筆.候選學員編號) : "") + "'>" +
+      "</td>" +
+      "<td><button class='action secondary' onclick=\"處理回填候選學員編號按鈕點擊('" +
+        轉義單引號(obj一筆.來源分頁) + "', " + obj一筆.來源列號 + ", '" + strInputId + "')\">回填</button></td>" +
+      "</tr>";
+  });
+
+  strHTML += "</tbody></table>";
+  return strHTML;
+}
+
+/** 資料組核對候選清單某一筆後，確認回填學員編號 */
+async function 處理回填候選學員編號按鈕點擊(str來源分頁, int來源列號, strInputId) {
+  const str學員編號 = document.getElementById(strInputId).value.trim();
+  if (!str學員編號) {
+    顯示區塊訊息("msgBottom", "請先輸入要回填的學員編號。", "error");
+    return;
+  }
+
+  顯示區塊訊息("msgBottom", "回填中，請稍候...", "info");
+  try {
+    const objResult = await 呼叫提報API("回填候選學員編號", {
+      來源分頁: str來源分頁,
+      來源列號: int來源列號,
+      學員編號: str學員編號
+    });
+    顯示區塊訊息("msgBottom", objResult.訊息 || (objResult.成功 ? "回填成功。" : "回填失敗。"), objResult.成功 ? "success" : "error");
+  } catch (錯誤) {
+    console.error("回填候選學員編號時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgBottom", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  }
+}
+
+
+// ==================== 【待複核清單】 ====================
+
+function 組出待複核清單表格HTML(arr待複核清單) {
+  if (!arr待複核清單 || arr待複核清單.length === 0) {
+    return "<div class='empty-hint'>目前沒有超額待複核的項目。</div>";
+  }
+
+  var strHTML = "<table><thead><tr>" +
+    "<th>學員編號</th><th>姓名</th><th>法名</th><th>聘書總數</th><th>組別</th><th>職稱</th><th>法師會議決議</th><th>取消原因</th>" +
+    "</tr></thead><tbody>";
+
+  arr待複核清單.forEach(function (obj一筆) {
+    var str候選項目ID = 轉義HTML(obj一筆.候選項目ID);
+    var strSelectId = "decisionSelect_" + str候選項目ID;
+    var strReasonId = "decisionReason_" + str候選項目ID;
+    var str目前決議 = obj一筆["法師會議決議"] || "";
+
+    strHTML += "<tr data-candidate-id='" + str候選項目ID + "'>" +
+      "<td>" + 轉義HTML(obj一筆.學員編號) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.姓名) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.法名) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆["聘書總數（該人）"]) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.組別) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.職稱) + "</td>" +
+      "<td><select id='" + strSelectId + "'>" +
+        "<option value=''" + (str目前決議 === "" ? " selected" : "") + ">（尚未決議）</option>" +
+        "<option value='保留'" + (str目前決議 === "保留" ? " selected" : "") + ">保留</option>" +
+        "<option value='取消'" + (str目前決議 === "取消" ? " selected" : "") + ">取消</option>" +
+      "</select></td>" +
+      "<td><input type='text' class='cancel-reason-input' id='" + strReasonId + "' placeholder='取消時請填寫原因' value='" +
+        轉義HTML(obj一筆.取消原因 || "") + "'></td>" +
+      "</tr>";
+  });
+
+  strHTML += "</tbody></table>";
+  return strHTML;
+}
+
+/** 掃描目前畫面上「待複核清單」表格的每一列，組成決議清單一次送出，
+ *  成功後重新載入清單，讓畫面反映最新狀態（停留在本頁，2026-09-22
+ *  法師訪談決議）。 */
+async function 處理送出決議按鈕點擊() {
+  const arrRows = document.querySelectorAll("#listArea tr[data-candidate-id]");
+  if (arrRows.length === 0) {
+    顯示區塊訊息("msgBottom", "目前沒有可送出的待複核項目。", "error");
+    return;
+  }
+
+  const arr決議清單 = [];
+  arrRows.forEach(function (elRow) {
+    const str候選項目ID = elRow.getAttribute("data-candidate-id");
+    const elSelect = document.getElementById("decisionSelect_" + str候選項目ID);
+    const elReason = document.getElementById("decisionReason_" + str候選項目ID);
+    const str決議 = elSelect ? elSelect.value : "";
+
+    if (str決議 === "保留" || str決議 === "取消") {
+      arr決議清單.push({
+        候選項目ID: str候選項目ID,
+        決議: str決議,
+        取消原因: elReason ? elReason.value.trim() : ""
+      });
+    }
+  });
+
+  if (arr決議清單.length === 0) {
+    顯示區塊訊息("msgBottom", "尚未選擇任何「保留」或「取消」，請至少決議一筆再送出。", "error");
+    return;
+  }
+
+  const btn = document.getElementById("btnSubmitDecisions");
+  btn.disabled = true;
+  顯示區塊訊息("msgBottom", "送出中，請稍候...", "info");
+
+  try {
+    const objResult = await 呼叫提報API("登錄決議", { 決議清單: arr決議清單 });
+    顯示區塊訊息("msgBottom", objResult.訊息 || (objResult.成功 ? "送出成功。" : "送出失敗。"), objResult.成功 ? "success" : "error");
+    if (objResult.成功) {
+      await 載入清單();
+    }
+  } catch (錯誤) {
+    console.error("送出決議時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgBottom", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+
+// ==================== 【核定名單】 ====================
+
+function 組出核定名單表格HTML(arr核定名單) {
+  if (!arr核定名單 || arr核定名單.length === 0) {
+    return "<div class='empty-hint'>目前尚未產出核定名單。</div>";
+  }
+
+  var strHTML = "<table><thead><tr>" +
+    "<th>學員編號</th><th>姓名</th><th>法名</th><th>性別</th><th>組別</th><th>職稱</th>" +
+    "</tr></thead><tbody>";
+
+  arr核定名單.forEach(function (obj一筆) {
+    strHTML += "<tr>" +
+      "<td>" + 轉義HTML(obj一筆.學員編號) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.姓名) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.法名) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.性別) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.組別) + "</td>" +
+      "<td>" + 轉義HTML(obj一筆.職稱) + "</td>" +
+      "</tr>";
+  });
+
+  strHTML += "</tbody></table>";
+  return strHTML;
+}
+
+
+// ==================== 【共用：依 str目前清單類型 分派渲染函式】 ====================
+
+function 組出清單表格HTML(arr清單資料) {
+  if (str目前清單類型 === "candidates") { return 組出候選清單表格HTML(arr清單資料); }
+  if (str目前清單類型 === "pending") { return 組出待複核清單表格HTML(arr清單資料); }
+  if (str目前清單類型 === "approved") { return 組出核定名單表格HTML(arr清單資料); }
+  return "<div class='empty-hint'>未知的清單類型。</div>";
+}
+
+/** 載入目前類型的清單（頁面載入時、按「重新整理」、送出決議成功後都會呼叫） */
+async function 載入清單() {
+  const obj設定 = CONST_清單設定[str目前清單類型];
+  const elArea = document.getElementById("listArea");
+  elArea.innerHTML = "<div class='empty-hint'>載入中，請稍候...</div>";
+  try {
+    const objResult = await 呼叫提報API(obj設定.查詢action);
+    if (objResult.成功) {
+      elArea.innerHTML = 組出清單表格HTML(objResult[obj設定.清單欄位]);
+    } else {
+      elArea.innerHTML = "<div class='empty-hint'>載入失敗：" + 轉義HTML(objResult.訊息 || "未知錯誤") + "</div>";
+    }
+  } catch (錯誤) {
+    console.error("載入清單時發生錯誤：", 錯誤);
+    elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
+  }
+}
+
+/** 下載目前類型的清單為 Excel（重新呼叫查詢 action 取得最新資料，不依賴畫面是否已載入） */
+async function 處理下載清單按鈕點擊() {
+  const obj設定 = CONST_清單設定[str目前清單類型];
+  const btn = document.getElementById("btnDownloadList");
+  btn.disabled = true;
+  try {
+    const objResult = await 呼叫提報API(obj設定.查詢action);
+    if (!objResult.成功) {
+      window.alert(objResult.訊息 || "查詢失敗，請稍後再試。");
+      return;
+    }
+    下載清單為Excel(
+      objResult[obj設定.清單欄位],
+      obj設定.下載欄位設定,
+      obj設定.下載檔名,
+      obj設定.無資料下載提示
+    );
+  } catch (錯誤) {
+    console.error("下載清單時發生未預期錯誤：", 錯誤);
+    window.alert("下載時發生未預期錯誤，請稍後再試或聯絡工程人員。");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+
+// ==================== 【頁面初始化】 ====================
+
+/**
+ * ------------------------------------------------------------
+ * 函式：初始化頁面
+ * 用途：從網址參數 ?type= 判斷要顯示哪一種清單，檢查登入狀態
+ *       （找不到就導回登入頁，跟其他頁面一致），套用對應的標題／
+ *       說明文字／按鈕顯示，並載入一次清單。
+ * ------------------------------------------------------------
+ */
+async function 初始化頁面() {
+  const obj登入資訊 = 取得目前登入精舍資訊();
+  if (!obj登入資訊) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  const objURL參數 = new URLSearchParams(window.location.search);
+  str目前清單類型 = objURL參數.get("type") || "";
+  const obj設定 = CONST_清單設定[str目前清單類型];
+
+  if (!obj設定) {
+    document.getElementById("loadingNotice").textContent = "網址參數錯誤，找不到對應的清單類型（type=" + 轉義HTML(str目前清單類型) + "）。";
+    return;
+  }
+
+  document.title = obj設定.標題 + "｜護法會雲端系統";
+  document.getElementById("pageTitleShow").innerHTML = obj設定.標題 + "　<span class='temple-name' id='templeNameShow'></span>";
+  document.getElementById("templeNameShow").textContent = "（" + obj登入資訊.精舍顯示名稱 + "）";
+  document.getElementById("cardTitleShow").textContent = obj設定.標題;
+  document.getElementById("cardDescShow").textContent = obj設定.說明;
+
+  if (str目前清單類型 === "pending") {
+    document.getElementById("submitRow").style.display = "flex";
+  }
+
+  document.getElementById("loadingNotice").style.display = "none";
+  document.getElementById("mainContent").style.display = "block";
+
+  await 載入清單();
+}
+
+初始化頁面();
+
+</script>
+</body>
+</html>
