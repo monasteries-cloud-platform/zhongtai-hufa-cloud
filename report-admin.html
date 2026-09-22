@@ -10,8 +10,24 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v3.1（2026-09-22）
+   * 版本：v4.0（2026-09-22）
    * 版本歷程：
+   *   - v4.0（2026-09-22，法師實測後訪談決議：「出席回報活動」／
+   *     「組長線上勾選出席回報網頁」整個拿掉，改成「出席調查表」）：
+   *     卡片六移除子區塊（2）出席回報活動（建立活動／重新整理清單／
+   *     活動清單表格／截止回報開關／查看總覽）與子區塊（3）組長線上
+   *     勾選出席回報（分享網址框），改成在子區塊（1）的按鈕旁新增
+   *     「產生出席調查表」按鈕──資料組指定好負責組別之後按下，系統
+   *     直接在主資料庫試算表依負責組別產生各組獨立分頁，並在按鈕
+   *     下方列出目前已產生的各組分頁清單與「開啟」連結；組長本人
+   *     到自己組別的分頁直接打勾「出席」即可，不需要另外登入頁面。
+   *     對應移除 report-attendance.html（本次不再部署），移除
+   *     顯示出席回報網址／處理複製出席回報網址按鈕點擊／
+   *     處理建立出席回報活動按鈕點擊／組出出席回報活動清單表格HTML／
+   *     載入出席回報活動清單／處理活動截止開關變更／
+   *     組出出席回報總覽表格HTML／載入出席回報總覽 等函式，新增
+   *     處理產生出席調查表按鈕點擊／組出出席調查表清單HTML／
+   *     載入出席調查表清單，其餘既有卡片與函式完全未變動。
    *   - v3.1（2026-09-22，法師實測後訪談決議：新增「開啟工作表」
    *     按鈕）：卡片六子區塊（1）在「產生／更新負責組別工作表」
    *     按鈕旁新增「開啟工作表」按鈕，直接開新分頁前往「出席回報
@@ -414,24 +430,13 @@
     <div class="step-row">
       <button class="action" id="btnGenerateResponsibleGroupSheet" onclick="處理產生負責組別工作表按鈕點擊()">產生／更新負責組別工作表</button>
       <button class="action secondary" id="btnOpenResponsibleGroupSheet" onclick="處理開啟負責組別工作表按鈕點擊()">開啟工作表</button>
+      <button class="action" id="btnGenerateAttendanceSurvey" onclick="處理產生出席調查表按鈕點擊()">產生出席調查表</button>
     </div>
     <div class="msg" id="msgResponsibleGroup"></div>
 
-    <div class="desc" style="margin-top:18px;">（2）出席回報活動：輸入活動名稱建立新活動，系統會從目前「核定名單」拷貝一份快照（之後核定名單異動不會影響已建立的活動）。每個活動可以獨立切換「截止回報」，也可以查看各組「已回報／未回報」進度總覽。</div>
-    <div class="step-row">
-      <input type="text" id="inputNewActivityName" placeholder="活動名稱（例如：10/03 護法會頒證）" style="max-width:260px;">
-      <button class="action" id="btnCreateActivity" onclick="處理建立出席回報活動按鈕點擊()">建立活動</button>
-      <button class="action secondary" onclick="載入出席回報活動清單()">重新整理清單</button>
-    </div>
-    <div id="activityListArea" style="margin-top:10px;"><div class="empty-hint">尚未載入活動清單。</div></div>
-    <div id="activityOverviewArea" style="margin-top:10px;"></div>
-    <div class="msg" id="msgActivity"></div>
-
-    <div class="desc" style="margin-top:18px;">（3）組長線上勾選出席回報，請把下方網址分享給各組組長（跟「組長線上填寫提報名單」共用同一組 Google 帳號登入，不需要另外登錄）：</div>
-    <div class="share-link-row">
-      組長出席回報網址：<span id="attendanceFormUrlShow">（請先確認登入狀態）</span>
-      <button class="action secondary" onclick="處理複製出席回報網址按鈕點擊()">複製網址</button>
-    </div>
+    <div class="desc" style="margin-top:18px;">（2）出席調查表：請先完成上方（1）的負責組別指定，再按「產生出席調查表」。系統會依「負責組別」把全體學員分組，在「資料庫試算表」整批（重新）產生各組獨立的「出席調查」工作頁，組長本人直接到自己組別的工作頁，在「出席」欄位打勾即可（隨打隨存，不需要另外登入或送出）。下方會列出目前已經產生的各組工作頁，可以直接點「開啟」前往。</div>
+    <div id="attendanceSurveyListArea" style="margin-top:10px;"><div class="empty-hint">尚未產生出席調查表。</div></div>
+    <div class="msg" id="msgAttendanceSurvey"></div>
   </div>
 
 </div>
@@ -1566,28 +1571,29 @@ function 處理開啟負責組別工作表按鈕點擊() {
   window.open(g_負責組別工作表網址, "_blank");
 }
 
-/** 版本 v1.0：建立出席回報活動 */
-async function 處理建立出席回報活動按鈕點擊() {
-  const elInput = document.getElementById("inputNewActivityName");
-  const str活動名稱 = elInput.value.trim();
-  if (!str活動名稱) {
-    顯示區塊訊息("msgActivity", "請先輸入活動名稱。", "error");
-    return;
-  }
-
-  const btn = document.getElementById("btnCreateActivity");
+/**
+ * ------------------------------------------------------------
+ * 函式：處理產生出席調查表按鈕點擊
+ * 版本：v1.0（2026-09-22，法師實測後訪談決議：「出席回報活動」／
+ *       「組長線上勾選出席回報網頁」整個拿掉，改成本函式）
+ * 用途：呼叫後端依「出席回報負責組別」把核定名單分組，在主資料庫
+ *       試算表整批（重新）產生各組獨立的出席調查分頁；成功後直接
+ *       用回傳的「工作表清單」重畫下方的清單區塊，不用另外再查一次。
+ * ------------------------------------------------------------
+ */
+async function 處理產生出席調查表按鈕點擊() {
+  const btn = document.getElementById("btnGenerateAttendanceSurvey");
   btn.disabled = true;
-  顯示區塊訊息("msgActivity", "建立中，請稍候...", "info");
+  顯示區塊訊息("msgAttendanceSurvey", "產生中，請稍候...", "info");
   try {
-    const objResult = await 呼叫提報API("建立出席回報活動", { 活動名稱: str活動名稱 });
-    顯示區塊訊息("msgActivity", objResult.訊息 || (objResult.成功 ? "完成。" : "失敗。"), objResult.成功 ? "success" : "error");
+    const objResult = await 呼叫提報API("產生出席調查表");
+    顯示區塊訊息("msgAttendanceSurvey", objResult.訊息 || (objResult.成功 ? "完成。" : "失敗。"), objResult.成功 ? "success" : "error");
     if (objResult.成功) {
-      elInput.value = "";
-      await 載入出席回報活動清單();
+      document.getElementById("attendanceSurveyListArea").innerHTML = 組出出席調查表清單HTML(objResult.工作表清單);
     }
   } catch (錯誤) {
-    console.error("建立出席回報活動時發生未預期錯誤：", 錯誤);
-    顯示區塊訊息("msgActivity", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+    console.error("產生出席調查表時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgAttendanceSurvey", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
   } finally {
     btn.disabled = false;
   }
@@ -1595,139 +1601,48 @@ async function 處理建立出席回報活動按鈕點擊() {
 
 /**
  * ------------------------------------------------------------
- * 函式：組出出席回報活動清單表格HTML
+ * 函式：組出出席調查表清單HTML
  * 版本：v1.0（2026-09-22）
+ * 用途：把「工作表清單」（[{組別,人數,網址}]）組成表格，每列一個
+ *       「開啟」按鈕直接開新分頁前往該組的出席調查工作頁。
  * ------------------------------------------------------------
  */
-function 組出出席回報活動清單表格HTML(arr活動清單) {
-  if (!arr活動清單 || arr活動清單.length === 0) {
-    return "<div class='empty-hint'>目前尚未建立任何出席回報活動。</div>";
+function 組出出席調查表清單HTML(arr工作表清單) {
+  if (!arr工作表清單 || arr工作表清單.length === 0) {
+    return "<div class='empty-hint'>尚未產生出席調查表。</div>";
   }
 
-  var strHTML = "<table><thead><tr>" +
-    "<th>活動名稱</th><th>截止回報</th><th>進度總覽</th>" +
-    "</tr></thead><tbody>";
-
-  arr活動清單.forEach(function (obj一筆, int索引) {
-    strHTML += "<tr>" +
-      "<td>" + 轉義HTML(obj一筆.活動名稱) + "</td>" +
-      "<td style='text-align:center;'><input type='checkbox' id='activityClosed_" + int索引 +
-        "' data-activity='" + 轉義HTML(obj一筆.活動名稱) + "'" + (obj一筆.截止回報 ? " checked" : "") +
-        " onchange='處理活動截止開關變更(this)'></td>" +
-      "<td><button class='action secondary' onclick=\"載入出席回報總覽('" + 轉義HTML(obj一筆.活動名稱).replace(/'/g, "\\'") + "')\">查看總覽</button></td>" +
-      "</tr>";
-  });
-
-  strHTML += "</tbody></table>";
-  return strHTML;
-}
-
-/** 版本 v1.0：載入出席回報活動清單 */
-async function 載入出席回報活動清單() {
-  const elArea = document.getElementById("activityListArea");
-  elArea.innerHTML = "<div class='empty-hint'>載入中，請稍候...</div>";
-  try {
-    const objResult = await 呼叫提報API("查詢出席回報活動清單");
-    if (objResult.成功) {
-      elArea.innerHTML = 組出出席回報活動清單表格HTML(objResult.活動清單);
-    } else {
-      elArea.innerHTML = "<div class='empty-hint'>載入失敗：" + 轉義HTML(objResult.訊息 || "未知錯誤") + "</div>";
-    }
-  } catch (錯誤) {
-    console.error("載入出席回報活動清單時發生錯誤：", 錯誤);
-    elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
-  }
-}
-
-/** 版本 v1.0：切換活動的「截止回報」開關 */
-async function 處理活動截止開關變更(elCheckbox) {
-  const str活動名稱 = elCheckbox.getAttribute("data-activity");
-  const bool即將設定為 = elCheckbox.checked;
-  elCheckbox.disabled = true;
-  try {
-    const objResult = await 呼叫提報API("設定出席回報活動截止狀態", { 活動名稱: str活動名稱, 截止回報: bool即將設定為 });
-    顯示區塊訊息("msgActivity", objResult.訊息 || (objResult.成功 ? "已更新。" : "更新失敗。"), objResult.成功 ? "success" : "error");
-    if (!objResult.成功) { elCheckbox.checked = !bool即將設定為; }
-  } catch (錯誤) {
-    console.error("設定活動截止狀態時發生未預期錯誤：", 錯誤);
-    elCheckbox.checked = !bool即將設定為;
-    顯示區塊訊息("msgActivity", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
-  } finally {
-    elCheckbox.disabled = false;
-  }
-}
-
-/**
- * ------------------------------------------------------------
- * 函式：組出出席回報總覽表格HTML
- * 版本：v1.0（2026-09-22）
- * ------------------------------------------------------------
- */
-function 組出出席回報總覽表格HTML(str活動名稱, arr總覽) {
-  var strHTML = "<div style='margin-top:6px; font-weight:bold; color:#2E5395;'>「" + 轉義HTML(str活動名稱) + "」進度總覽</div>";
-  if (!arr總覽 || arr總覽.length === 0) {
-    return strHTML + "<div class='empty-hint'>本活動目前沒有任何名單資料。</div>";
-  }
-
-  strHTML += "<table><thead><tr><th>負責組別</th><th>總人數</th><th>已回報</th><th>未回報</th></tr></thead><tbody>";
-  arr總覽.forEach(function (obj一筆) {
+  var strHTML = "<table><thead><tr><th>組別</th><th>人數</th><th>工作頁</th></tr></thead><tbody>";
+  arr工作表清單.forEach(function (obj一筆) {
     strHTML += "<tr>" +
       "<td>" + 轉義HTML(obj一筆.組別) + "</td>" +
-      "<td>" + obj一筆.總人數 + "</td>" +
-      "<td>" + obj一筆.已回報 + "</td>" +
-      "<td>" + obj一筆.未回報 + "</td>" +
+      "<td>" + obj一筆.人數 + "</td>" +
+      "<td><button class='action secondary' onclick=\"window.open('" + String(obj一筆.網址 || "").replace(/'/g, "\\'") + "', '_blank')\">開啟</button></td>" +
       "</tr>";
   });
   strHTML += "</tbody></table>";
   return strHTML;
 }
 
-/** 版本 v1.0：載入出席回報總覽 */
-async function 載入出席回報總覽(str活動名稱) {
-  const elArea = document.getElementById("activityOverviewArea");
-  elArea.innerHTML = "<div class='empty-hint'>載入中，請稍候...</div>";
-  try {
-    const objResult = await 呼叫提報API("查詢出席回報總覽", { 活動名稱: str活動名稱 });
-    if (objResult.成功) {
-      elArea.innerHTML = 組出出席回報總覽表格HTML(str活動名稱, objResult.總覽);
-    } else {
-      elArea.innerHTML = "<div class='empty-hint'>載入失敗：" + 轉義HTML(objResult.訊息 || "未知錯誤") + "</div>";
-    }
-  } catch (錯誤) {
-    console.error("載入出席回報總覽時發生錯誤：", 錯誤);
-    elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
-  }
-}
-
 /**
  * ------------------------------------------------------------
- * 函式：顯示出席回報網址
+ * 函式：載入出席調查表清單
  * 版本：v1.0（2026-09-22）
- * 用途：組出「組長線上出席回報」網頁（report-attendance.html，本頁
- *       同目錄下的新頁面）的完整分享網址，帶上目前登入精舍的代碼
- *       查詢字串，比照 顯示組長表單網址 的做法。
+ * 用途：頁面載入時預先查一次目前已經產生的各組出席調查分頁（純
+ *       讀取，不會重新產生），讓資料組一進頁面就能看到既有清單，
+ *       不用先按過一次「產生出席調查表」。
  * ------------------------------------------------------------
  */
-function 顯示出席回報網址() {
-  const obj登入資訊 = 取得目前登入精舍資訊();
-  if (!obj登入資訊) { return; }
-  const strBaseUrl = window.location.href.substring(0, window.location.href.lastIndexOf("/") + 1);
-  const strUrl = strBaseUrl + "report-attendance.html?temple=" + encodeURIComponent(obj登入資訊.精舍代碼);
-  document.getElementById("attendanceFormUrlShow").textContent = strUrl;
-}
-
-/** 版本 v1.0：複製出席回報網址到剪貼簿 */
-function 處理複製出席回報網址按鈕點擊() {
-  const strUrl = document.getElementById("attendanceFormUrlShow").textContent;
-  if (!strUrl || strUrl.indexOf("http") !== 0) {
-    顯示區塊訊息("msgActivity", "尚未取得網址，請重新整理頁面再試一次。", "error");
-    return;
+async function 載入出席調查表清單() {
+  const elArea = document.getElementById("attendanceSurveyListArea");
+  try {
+    const objResult = await 呼叫提報API("查詢出席調查表清單");
+    if (objResult.成功) {
+      elArea.innerHTML = 組出出席調查表清單HTML(objResult.工作表清單);
+    }
+  } catch (錯誤) {
+    console.error("載入出席調查表清單時發生錯誤：", 錯誤);
   }
-  navigator.clipboard.writeText(strUrl).then(function () {
-    顯示區塊訊息("msgActivity", "已複製組長出席回報網址，可以直接分享給組長。", "success");
-  }, function () {
-    顯示區塊訊息("msgActivity", "複製失敗，請手動選取上方網址複製。", "error");
-  });
 }
 
 
@@ -1771,13 +1686,13 @@ async function 初始化頁面() {
   載入可選組別清單();
   載入截止提報狀態();
 
-  // 卡片六「出席回報管理」：活動清單與組長分享網址，跟卡片五一樣資料量小，
-  // 直接在頁面載入時就顯示（2026-09-22 新增）。負責組別工作表不自動產生
-  // （那是會寫入試算表的動作，要資料組主動按按鈕才執行），但會預先查一次
-  // 網址（若之前已經產生過），讓「開啟工作表」按鈕一進頁面就能直接用。
-  顯示出席回報網址();
-  載入出席回報活動清單();
+  // 卡片六「出席回報管理」：負責組別工作表網址、出席調查表清單，都只是
+  // 純讀取既有狀態，直接在頁面載入時查一次（2026-09-22 法師實測後訪談
+  // 決議：拿掉「出席回報活動」與組長登入網頁，改成本卡片）。「產生／
+  // 更新負責組別工作表」「產生出席調查表」這兩個會寫入試算表的動作，
+  // 仍然要資料組主動按按鈕才執行，不會自動觸發。
   載入負責組別工作表網址();
+  載入出席調查表清單();
 }
 
 初始化頁面();
