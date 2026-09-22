@@ -10,8 +10,15 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v2.0（2026-09-22）
+   * 版本：v3.0（2026-09-22）
    * 版本歷程：
+   *   - v3.0（2026-09-22，法師實測後訪談決議：「出席回報負責組別
+   *     指定」改成直接在試算表工作頁操作，網頁上不顯示）：卡片六
+   *     子區塊（1）拿掉原本的表格與「查詢身兼多組名單」「送出
+   *     設定」兩顆按鈕，改成單一顆「產生／更新負責組別工作表」
+   *     按鈕，呼叫後端新 action「產生出席回報負責組別工作表」，
+   *     直接在主資料庫試算表產生／更新工作頁（含資料驗證下拉
+   *     選單），資料組之後在試算表上操作，網頁只顯示完成訊息。
    *   - v2.0（2026-09-22，Module5「出席回報」，2026-09-22 訪談確認
    *     「確認OK」）：新增「六、出席回報管理」卡片，含三個子區塊：
    *     （1）出席回報負責組別指定──列出核定名單中聘書總數 ≥ 2（身兼
@@ -397,12 +404,10 @@
   <div class="card">
     <h2>六、出席回報管理</h2>
 
-    <div class="desc">（1）出席回報負責組別指定：核定名單中「聘書總數 ≥ 2」（身兼多組）的學員，請指定一組「負責組別」，決定這位學員的出席由哪一組負責上台確認；只有一組聘書的學員不會列在這裡，系統自動視為該組負責。修改後記得按「送出設定」。</div>
+    <div class="desc">（1）出席回報負責組別指定：核定名單中「聘書總數 ≥ 2」（身兼多組）的學員，需要指定一組「負責組別」，決定這位學員的出席由哪一組負責上台確認；只有一組聘書的學員不需要指定，系統自動視為該組負責。按下方按鈕後，系統會直接在「資料庫試算表」產生／更新一個「出席回報負責組別」工作頁，請直接到那個工作頁，用「負責組別」欄位的下拉選單逐一選定即可（不需要在這個網頁上操作）。若核定名單後續有異動，重新按一次本按鈕即可更新工作頁，已經選過的負責組別不會被清空。</div>
     <div class="step-row">
-      <button class="action secondary" id="btnLoadMultiGroupList" onclick="載入身兼多組聘書清單()">查詢身兼多組名單</button>
-      <button class="action" id="btnSubmitResponsibleGroup" onclick="處理送出負責組別設定按鈕點擊()">送出設定</button>
+      <button class="action" id="btnGenerateResponsibleGroupSheet" onclick="處理產生負責組別工作表按鈕點擊()">產生／更新負責組別工作表</button>
     </div>
-    <div id="multiGroupListArea" style="margin-top:10px;"><div class="empty-hint">尚未查詢，請按「查詢身兼多組名單」。</div></div>
     <div class="msg" id="msgResponsibleGroup"></div>
 
     <div class="desc" style="margin-top:18px;">（2）出席回報活動：輸入活動名稱建立新活動，系統會從目前「核定名單」拷貝一份快照（之後核定名單異動不會影響已建立的活動）。每個活動可以獨立切換「截止回報」，也可以查看各組「已回報／未回報」進度總覽。</div>
@@ -1479,86 +1484,26 @@ function 處理複製組長表單網址按鈕點擊() {
 
 // ==================== 【卡片六：出席回報管理，2026-09-22 新增（Module5）】 ====================
 
-var g_身兼多組清單快取 = []; // 「出席回報負責組別指定」目前畫面上的資料（含使用者尚未送出的選擇）
-
 /**
  * ------------------------------------------------------------
- * 函式：組出身兼多組清單表格HTML
- * 版本：v1.0（2026-09-22）
+ * 函式：處理產生負責組別工作表按鈕點擊
+ * 版本：v1.0（2026-09-22，法師實測後訪談決議：「出席回報負責組別
+ *       指定」改成直接在試算表工作頁操作，網頁上不顯示，拿掉原本
+ *       的表格與「查詢身兼多組名單」「送出設定」兩顆按鈕）
+ * 用途：呼叫後端在主資料庫試算表產生／更新「出席回報負責組別」
+ *       工作頁（含逐列資料驗證下拉選單），資料組之後直接到試算表
+ *       操作，本頁只顯示「完成、共 N 位」這類結果訊息，不顯示明細。
  * ------------------------------------------------------------
  */
-function 組出身兼多組清單表格HTML(arr清單) {
-  if (!arr清單 || arr清單.length === 0) {
-    return "<div class='empty-hint'>目前核定名單中沒有聘書總數 ≥ 2（身兼多組）的學員，不需要另外指定負責組別。</div>";
-  }
-
-  var strHTML = "<table><thead><tr>" +
-    "<th>學員編號</th><th>姓名</th><th>聘書總數</th><th>候選組別</th><th>負責組別</th>" +
-    "</tr></thead><tbody>";
-
-  arr清單.forEach(function (obj一筆, int索引) {
-    strHTML += "<tr>" +
-      "<td>" + 轉義HTML(obj一筆.學員編號) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.姓名) + "</td>" +
-      "<td>" + obj一筆.聘書總數 + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.候選組別.join("、")) + "</td>" +
-      "<td><select id='responsibleGroup_" + int索引 + "'>" +
-        "<option value=''" + (obj一筆.負責組別 ? "" : " selected") + ">請選擇...</option>" +
-        obj一筆.候選組別.map(function (str組別) {
-          return "<option value='" + 轉義HTML(str組別) + "'" + (str組別 === obj一筆.負責組別 ? " selected" : "") + ">" + 轉義HTML(str組別) + "</option>";
-        }).join("") +
-      "</select></td>" +
-      "</tr>";
-  });
-
-  strHTML += "</tbody></table>";
-  return strHTML;
-}
-
-/** 版本 v1.0：查詢身兼多組聘書清單 */
-async function 載入身兼多組聘書清單() {
-  const elArea = document.getElementById("multiGroupListArea");
-  elArea.innerHTML = "<div class='empty-hint'>載入中，請稍候...</div>";
-  try {
-    const objResult = await 呼叫提報API("查詢身兼多組聘書清單");
-    if (objResult.成功) {
-      g_身兼多組清單快取 = objResult.清單 || [];
-      elArea.innerHTML = 組出身兼多組清單表格HTML(g_身兼多組清單快取);
-    } else {
-      elArea.innerHTML = "<div class='empty-hint'>載入失敗：" + 轉義HTML(objResult.訊息 || "未知錯誤") + "</div>";
-    }
-  } catch (錯誤) {
-    console.error("載入身兼多組聘書清單時發生錯誤：", 錯誤);
-    elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
-  }
-}
-
-/** 版本 v1.0：送出負責組別設定 */
-async function 處理送出負責組別設定按鈕點擊() {
-  if (g_身兼多組清單快取.length === 0) {
-    顯示區塊訊息("msgResponsibleGroup", "請先按「查詢身兼多組名單」載入清單。", "error");
-    return;
-  }
-
-  var arr設定清單 = g_身兼多組清單快取.map(function (obj一筆, int索引) {
-    var elSelect = document.getElementById("responsibleGroup_" + int索引);
-    return { 學員編號: obj一筆.學員編號, 負責組別: elSelect ? elSelect.value : "" };
-  }).filter(function (obj一筆) { return obj一筆.負責組別; });
-
-  if (arr設定清單.length === 0) {
-    顯示區塊訊息("msgResponsibleGroup", "尚未選擇任何負責組別，請至少選定一筆後再送出。", "error");
-    return;
-  }
-
-  const btn = document.getElementById("btnSubmitResponsibleGroup");
+async function 處理產生負責組別工作表按鈕點擊() {
+  const btn = document.getElementById("btnGenerateResponsibleGroupSheet");
   btn.disabled = true;
-  顯示區塊訊息("msgResponsibleGroup", "送出中，請稍候...", "info");
+  顯示區塊訊息("msgResponsibleGroup", "產生中，請稍候...", "info");
   try {
-    const objResult = await 呼叫提報API("設定出席回報負責組別", { 設定清單: arr設定清單 });
+    const objResult = await 呼叫提報API("產生出席回報負責組別工作表");
     顯示區塊訊息("msgResponsibleGroup", objResult.訊息 || (objResult.成功 ? "完成。" : "失敗。"), objResult.成功 ? "success" : "error");
-    if (objResult.成功) { await 載入身兼多組聘書清單(); }
   } catch (錯誤) {
-    console.error("送出負責組別設定時發生未預期錯誤：", 錯誤);
+    console.error("產生負責組別工作表時發生未預期錯誤：", 錯誤);
     顯示區塊訊息("msgResponsibleGroup", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
   } finally {
     btn.disabled = false;
