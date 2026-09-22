@@ -1,17 +1,29 @@
 /**
  * ============================================================
  * 檔案：共用設定檔
- * 版本：v1.2（2026-09-19）
+ * 版本：v1.3（2026-09-22）
  * 版本歷程：
+ *   - v1.3（2026-09-22，修正合併遺漏）：2026-09-21 新增
+ *     GOOGLE_CLIENT_ID_前端 那次修改，是從一份較舊的本機備份
+ *     編輯後整檔覆蓋回去，結果不小心把 2026-09-19 新增的「總
+ *     管理員登入 session 輔助函式」（取得/儲存/清除登入管理者
+ *     資訊）覆蓋掉了，導致 system-admin.html 載入時
+ *     ReferenceError、登入畫面完全出不來。這個版本把兩邊的異動
+ *     合併回同一份檔案：保留 GOOGLE_CLIENT_ID_前端 設定，同時
+ *     補回三個管理者登入輔助函式。以後每次修改 config.js 前，
+ *     務必先跟目前線上版本比對，避免再次用舊備份整檔覆蓋。
+ *   - v1.2（2026-09-21）：GOOGLE_CLIENT_ID_前端 由待填佔位文字改填
+ *     正式申請完成的 Google OAuth Client ID（供「組長線上填寫提報
+ *     名單網頁表單」report-form.html 的 Google 登入元件使用）。
  *   - v1.1（2026-09-18）：`呼叫後端API()` 新增「連線失敗自動重試
  *     一次」機制，改善 Apps Script Web App 閒置後第一次呼叫偶爾
  *     連線失敗的現象（詳見該函式的變更說明）。
  *   - 2026-09-19：WEB_APP_網址 由待填佔位文字改填正式部署網址
  *     （不算邏輯變更，故不列入版本號，僅記錄異動時間點）。
- *   - v1.2（2026-09-19）：新增「總管理員登入資訊」的存取函式
- *     （儲存／取得／清除），供新增的 system-admin.html（系統管理
- *     後台）使用，比照既有精舍登入資訊的存取方式，統一集中管理
- *     sessionStorage 的 key 名稱，避免打錯字。
+ *   - 2026-09-19：新增「總管理員登入資訊」的存取函式（儲存／取得／
+ *     清除），供 system-admin.html（系統管理後台）使用，比照既有
+ *     精舍登入資訊的存取方式，統一集中管理 sessionStorage 的 key
+ *     名稱，避免打錯字。
  * 說明：
  *   護法會雲端系統的前端共用設定，提報系統、報到系統、精舍後台
  *   管理、系統管理後台等所有頁面都引用這份設定檔，未來若 Web App
@@ -22,6 +34,12 @@
 
 // 部署 Apps Script Web App 後拿到的網址（2026-09-19 填入正式部署網址）
 const WEB_APP_網址 = "https://script.google.com/macros/s/AKfycby5gQrRgR4rXzW9BSnmJ7_-jOvqb1OunMSquHiq0xQTsxuBWY0Y6BftEQYRpTeAHi8g/exec";
+
+// 「組長線上填寫提報名單網頁表單」（report-form.html）Google 登入元件用的
+// Google OAuth Client ID，2026-09-21 於 Google Cloud 專案 hufa-cloud-system 申請完成。
+// 這一組值必須跟後端 Script Properties 的 GOOGLE_CLIENT_ID 設成完全一樣，
+// 否則後端 驗證GoogleIdToken() 比對 aud 欄位時會判定為無效 token。
+const GOOGLE_CLIENT_ID_前端 = "1097675230838-338d9rf5b55eqkr9pp58o1da7kuehsgf.apps.googleusercontent.com";
 
 // 精舍登入後，token 存在瀏覽器 sessionStorage 時使用的 key 名稱，統一集中管理避免打錯字
 const SESSION_KEY_精舍TOKEN = "護法會雲端系統_精舍token";
