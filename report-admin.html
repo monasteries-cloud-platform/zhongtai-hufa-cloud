@@ -10,8 +10,25 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v4.0（2026-09-22）
+   * 版本：v5.0（2026-09-22）
    * 版本歷程：
+   *   - v5.0（2026-09-22，法師訪談決議：三個內嵌表格改開另一個
+   *     網頁處理）：卡片二「候選清單」、卡片三「待複核清單」、
+   *     卡片四「核定名單」原本直接畫在本頁的表格，改成按「顯示
+   *     OO清單」時用 window.open() 開新分頁前往新增的
+   *     review-lists.html（共用一個清單處理頁，用網址參數
+   *     ?type=candidates｜pending｜approved 區分，沿用本頁登入
+   *     狀態，不需要重新登入）。卡片三原本表格下方的「② 送出
+   *     決議」按鈕一併移除（決議改在 review-lists.html 上送出，
+   *     送出後停留在該頁、清單自動重新整理）。移除
+   *     組出候選清單表格HTML／載入候選清單／
+   *     處理回填候選學員編號按鈕點擊／組出待複核清單表格HTML／
+   *     載入待複核清單／處理送出決議按鈕點擊／
+   *     組出核定名單表格HTML／載入核定名單，以及對應的
+   *     candidateListArea／reviewListArea／approvedListArea 容器；
+   *     「①」動作按鈕（處理檢核提報資料按鈕點擊／處理彙總職務數
+   *     與超額標色按鈕點擊／處理套用決議並產出核定名單按鈕點擊）
+   *     與三顆「下載OO清單」按鈕完全未變動。
    *   - v4.0（2026-09-22，法師實測後訪談決議：「出席回報活動」／
    *     「組長線上勾選出席回報網頁」整個拿掉，改成「出席調查表」）：
    *     卡片六移除子區塊（2）出席回報活動（建立活動／重新整理清單／
@@ -336,15 +353,10 @@
     <div class="desc">「檢核提報資料」會依序（1）用學員基本資料補齊姓名／法名／性別，查無資料的列會標黃提醒；（2）針對組長只填姓名、沒填學員編號的情況自動反查，唯一命中會自動補回，同名多筆或查無資料會列入候選清單（檢核完不會自動顯示明細，請按「顯示候選清單」查看），核對後在候選學員編號欄位確認並回填。</div>
     <div class="step-row">
       <button class="action" id="btnCheckReportData" onclick="處理檢核提報資料按鈕點擊()">① 檢核提報資料</button>
-      <button class="action secondary" id="btnRefreshCandidateList" onclick="載入候選清單()">顯示候選清單</button>
+      <button class="action secondary" id="btnRefreshCandidateList" onclick="window.open('review-lists.html?type=candidates', '_blank')">顯示候選清單</button>
       <button class="action secondary" id="btnDownloadCandidateList" onclick="處理下載候選清單按鈕點擊()">下載候選清單</button>
     </div>
     <div class="msg" id="msgMatch"></div>
-
-    <div id="candidateListArea" style="margin-top:14px;">
-      <div class="empty-hint">尚未載入候選清單。</div>
-    </div>
-    <div class="msg" id="msgCandidateList"></div>
   </div>
 
   <!-- 卡片三：檢核聘書數 -->
@@ -353,18 +365,10 @@
     <div class="desc">「檢核聘書數」會依學員編號彙總全體職務數，超過門檻（3張聘書）的人整列標紅，並列入「待複核清單」（檢核完不會自動顯示明細，請按「顯示待複核清單」查看），請法師會議逐筆針對「這一筆職務」勾選保留或取消（取消要填原因），選好後按「送出決議」一次送出。</div>
     <div class="step-row">
       <button class="action" id="btnSummarizeOverLimit" onclick="處理彙總職務數與超額標色按鈕點擊()">① 檢核聘書數</button>
-      <button class="action secondary" id="btnRefreshReviewList" onclick="載入待複核清單()">顯示待複核清單</button>
+      <button class="action secondary" id="btnRefreshReviewList" onclick="window.open('review-lists.html?type=pending', '_blank')">顯示待複核清單</button>
       <button class="action secondary" id="btnDownloadReviewList" onclick="處理下載待複核清單按鈕點擊()">下載待複核清單</button>
     </div>
     <div class="msg" id="msgSummarize"></div>
-
-    <div id="reviewListArea" style="margin-top:14px;">
-      <div class="empty-hint">尚未載入待複核清單。</div>
-    </div>
-    <div class="step-row" style="margin-top:10px;">
-      <button class="action" id="btnSubmitDecisions" onclick="處理送出決議按鈕點擊()">② 送出決議</button>
-    </div>
-    <div class="msg" id="msgReviewList"></div>
   </div>
 
   <!-- 卡片四：產出核定名單 -->
@@ -373,14 +377,10 @@
     <div class="desc">確認「待複核清單」所有超額項目都已決議完畢後，執行「產出核定名單」，系統會彙整所有有效聘任的職務、扣除決議取消的部分，產出核定名單（同步刷新原始版快照）。若還有未決議項目會提醒，不會產出。產出完不會自動顯示明細，請按「顯示核定名單」查看。</div>
     <div class="step-row">
       <button class="action" id="btnGenerateApprovedList" onclick="處理套用決議並產出核定名單按鈕點擊()">① 產出核定名單</button>
-      <button class="action secondary" id="btnRefreshApprovedList" onclick="載入核定名單()">顯示核定名單</button>
+      <button class="action secondary" id="btnRefreshApprovedList" onclick="window.open('review-lists.html?type=approved', '_blank')">顯示核定名單</button>
       <button class="action secondary" id="btnDownloadApprovedList" onclick="處理下載核定名單按鈕點擊()">下載核定名單</button>
     </div>
     <div class="msg" id="msgApprovedList"></div>
-
-    <div id="approvedListArea" style="margin-top:14px;">
-      <div class="empty-hint">尚未載入核定名單。</div>
-    </div>
 
     <div class="desc" style="margin-top:16px;">把目前的核定名單輸出到報到系統，變成一個可以現場報到的場次。若身兼多組職務的學員在核定名單中重複多筆，只會輸出一列，其餘身兼組別會合併寫在「注意事項」欄位。場次代碼若已存在，需二次確認後才會用最新核定名單覆蓋；若該場次已經有人報到過，系統會直接拒絕輸出。</div>
     <div class="step-row" style="margin-top:10px;">
@@ -679,60 +679,6 @@ async function 處理檢核提報資料按鈕點擊() {
 
 /**
  * ------------------------------------------------------------
- * 函式：組出候選清單表格HTML
- * 版本：v1.0（2026-09-18）
- * 用途：把「姓名反查候選清單」渲染成表格，每一列附上一個輸入框
- *       ＋「確認回填」按鈕，供資料組核對後直接把正確學員編號
- *       回填到來源分頁，取代舊版「手動回到提報分頁填學員編號」。
- * ------------------------------------------------------------
- */
-function 組出候選清單表格HTML(arr候選清單) {
-  if (!arr候選清單 || arr候選清單.length === 0) {
-    return "<div class='empty-hint'>目前沒有需要人工核對的候選項目。</div>";
-  }
-
-  var strHTML = "<table><thead><tr>" +
-    "<th>來源分頁</th><th>來源列號</th><th>組長填寫姓名</th><th>候選學員編號</th><th>候選法名</th><th>候選性別</th><th>確認回填</th>" +
-    "</tr></thead><tbody>";
-
-  arr候選清單.forEach(function (obj一筆, int索引) {
-    var strInputId = "backfillInput_" + int索引;
-    strHTML += "<tr>" +
-      "<td>" + 轉義HTML(obj一筆.來源分頁) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.來源列號) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.組長填寫姓名) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.候選學員編號) + "（" + 轉義HTML(obj一筆.候選法名) + "／" + 轉義HTML(obj一筆.候選性別) + "）</td>" +
-      "<td colspan='2'>" +
-        "<input type='text' class='backfill-id-input' id='" + strInputId + "' placeholder='正確學員編號' value='" +
-        (String(obj一筆.候選學員編號 || "").indexOf("查無同名") === -1 ? 轉義HTML(obj一筆.候選學員編號) : "") + "'>" +
-      "</td>" +
-      "<td><button class='action secondary' onclick=\"處理回填候選學員編號按鈕點擊('" +
-        轉義單引號(obj一筆.來源分頁) + "', " + obj一筆.來源列號 + ", '" + strInputId + "')\">回填</button></td>" +
-      "</tr>";
-  });
-
-  strHTML += "</tbody></table>";
-  return strHTML;
-}
-
-/** 版本 v1.0：載入候選清單 */
-async function 載入候選清單() {
-  const elArea = document.getElementById("candidateListArea");
-  try {
-    const objResult = await 呼叫提報API("查詢候選清單");
-    if (objResult.成功) {
-      elArea.innerHTML = 組出候選清單表格HTML(objResult.候選清單);
-    } else {
-      elArea.innerHTML = "<div class='empty-hint'>載入失敗：" + 轉義HTML(objResult.訊息 || "未知錯誤") + "</div>";
-    }
-  } catch (錯誤) {
-    console.error("載入候選清單時發生錯誤：", 錯誤);
-    elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
-  }
-}
-
-/**
- * ------------------------------------------------------------
  * 函式：處理下載候選清單按鈕點擊
  * 版本：v1.0（2026-09-20，法師建議新增）
  * 用途：重新呼叫「查詢候選清單」取得目前最新資料（不依賴畫面上
@@ -770,28 +716,6 @@ async function 處理下載候選清單按鈕點擊() {
   }
 }
 
-/** 版本 v1.0：資料組核對候選清單某一筆後，確認回填學員編號 */
-async function 處理回填候選學員編號按鈕點擊(str來源分頁, int來源列號, strInputId) {
-  const str學員編號 = document.getElementById(strInputId).value.trim();
-  if (!str學員編號) {
-    顯示區塊訊息("msgCandidateList", "請先輸入要回填的學員編號。", "error");
-    return;
-  }
-
-  顯示區塊訊息("msgCandidateList", "回填中，請稍候...", "info");
-  try {
-    const objResult = await 呼叫提報API("回填候選學員編號", {
-      來源分頁: str來源分頁,
-      來源列號: int來源列號,
-      學員編號: str學員編號
-    });
-    顯示區塊訊息("msgCandidateList", objResult.訊息 || (objResult.成功 ? "回填成功。" : "回填失敗。"), objResult.成功 ? "success" : "error");
-  } catch (錯誤) {
-    console.error("回填候選學員編號時發生未預期錯誤：", 錯誤);
-    顯示區塊訊息("msgCandidateList", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
-  }
-}
-
 
 // ==================== 【卡片三：超額標色與法師會議決議】 ====================
 
@@ -820,68 +744,6 @@ async function 處理彙總職務數與超額標色按鈕點擊() {
     顯示區塊訊息("msgSummarize", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
   } finally {
     btn.disabled = false;
-  }
-}
-
-/**
- * ------------------------------------------------------------
- * 函式：組出待複核清單表格HTML
- * 版本：v1.0（2026-09-18）
- * 用途：把「待複核清單」渲染成表格，每一列（每一筆職務）附上
- *       「保留／取消」下拉選單與取消原因輸入框，供法師會議逐筆
- *       決議；「候選項目ID」是本次移植新增的穩定識別碼，藏在
- *       隱藏欄位裡（畫面上不需要法師看到，但送出決議時要一併帶回）。
- * ------------------------------------------------------------
- */
-function 組出待複核清單表格HTML(arr待複核清單) {
-  if (!arr待複核清單 || arr待複核清單.length === 0) {
-    return "<div class='empty-hint'>目前沒有超額待複核的項目。</div>";
-  }
-
-  var strHTML = "<table><thead><tr>" +
-    "<th>學員編號</th><th>姓名</th><th>法名</th><th>聘書總數</th><th>組別</th><th>職稱</th><th>法師會議決議</th><th>取消原因</th>" +
-    "</tr></thead><tbody>";
-
-  arr待複核清單.forEach(function (obj一筆) {
-    var str候選項目ID = 轉義HTML(obj一筆.候選項目ID);
-    var strSelectId = "decisionSelect_" + str候選項目ID;
-    var strReasonId = "decisionReason_" + str候選項目ID;
-    var str目前決議 = obj一筆["法師會議決議"] || "";
-
-    strHTML += "<tr data-candidate-id='" + str候選項目ID + "'>" +
-      "<td>" + 轉義HTML(obj一筆.學員編號) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.姓名) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.法名) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆["聘書總數（該人）"]) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.組別) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.職稱) + "</td>" +
-      "<td><select id='" + strSelectId + "'>" +
-        "<option value=''" + (str目前決議 === "" ? " selected" : "") + ">（尚未決議）</option>" +
-        "<option value='保留'" + (str目前決議 === "保留" ? " selected" : "") + ">保留</option>" +
-        "<option value='取消'" + (str目前決議 === "取消" ? " selected" : "") + ">取消</option>" +
-      "</select></td>" +
-      "<td><input type='text' class='cancel-reason-input' id='" + strReasonId + "' placeholder='取消時請填寫原因' value='" +
-        轉義HTML(obj一筆.取消原因 || "") + "'></td>" +
-      "</tr>";
-  });
-
-  strHTML += "</tbody></table>";
-  return strHTML;
-}
-
-/** 版本 v1.0：載入待複核清單 */
-async function 載入待複核清單() {
-  const elArea = document.getElementById("reviewListArea");
-  try {
-    const objResult = await 呼叫提報API("查詢待複核清單");
-    if (objResult.成功) {
-      elArea.innerHTML = 組出待複核清單表格HTML(objResult.待複核清單);
-    } else {
-      elArea.innerHTML = "<div class='empty-hint'>載入失敗：" + 轉義HTML(objResult.訊息 || "未知錯誤") + "</div>";
-    }
-  } catch (錯誤) {
-    console.error("載入待複核清單時發生錯誤：", 錯誤);
-    elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
   }
 }
 
@@ -926,61 +788,6 @@ async function 處理下載待複核清單按鈕點擊() {
   }
 }
 
-/**
- * ------------------------------------------------------------
- * 函式：處理送出決議按鈕點擊
- * 版本：v1.0（2026-09-18）
- * 用途：掃描目前畫面上「待複核清單」表格的每一列，把已選擇
- *       （非「尚未決議」）的項目組成決議清單，呼叫「登錄決議」
- *       API 一次送出，成功後重新載入清單，讓畫面反映最新狀態。
- * ------------------------------------------------------------
- */
-async function 處理送出決議按鈕點擊() {
-  const arrRows = document.querySelectorAll("#reviewListArea tr[data-candidate-id]");
-  if (arrRows.length === 0) {
-    顯示區塊訊息("msgReviewList", "目前沒有可送出的待複核項目。", "error");
-    return;
-  }
-
-  const arr決議清單 = [];
-  arrRows.forEach(function (elRow) {
-    const str候選項目ID = elRow.getAttribute("data-candidate-id");
-    const elSelect = document.getElementById("decisionSelect_" + str候選項目ID);
-    const elReason = document.getElementById("decisionReason_" + str候選項目ID);
-    const str決議 = elSelect ? elSelect.value : "";
-
-    if (str決議 === "保留" || str決議 === "取消") {
-      arr決議清單.push({
-        候選項目ID: str候選項目ID,
-        決議: str決議,
-        取消原因: elReason ? elReason.value.trim() : ""
-      });
-    }
-  });
-
-  if (arr決議清單.length === 0) {
-    顯示區塊訊息("msgReviewList", "尚未選擇任何「保留」或「取消」，請至少決議一筆再送出。", "error");
-    return;
-  }
-
-  const btn = document.getElementById("btnSubmitDecisions");
-  btn.disabled = true;
-  顯示區塊訊息("msgReviewList", "送出中，請稍候...", "info");
-
-  try {
-    const objResult = await 呼叫提報API("登錄決議", { 決議清單: arr決議清單 });
-    顯示區塊訊息("msgReviewList", objResult.訊息 || (objResult.成功 ? "送出成功。" : "送出失敗。"), objResult.成功 ? "success" : "error");
-    if (objResult.成功) {
-      await 載入待複核清單();
-    }
-  } catch (錯誤) {
-    console.error("送出決議時發生未預期錯誤：", 錯誤);
-    顯示區塊訊息("msgReviewList", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
-  } finally {
-    btn.disabled = false;
-  }
-}
-
 
 // ==================== 【卡片四：核定名單】 ====================
 
@@ -1009,52 +816,6 @@ async function 處理套用決議並產出核定名單按鈕點擊() {
     顯示區塊訊息("msgApprovedList", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
   } finally {
     btn.disabled = false;
-  }
-}
-
-/**
- * ------------------------------------------------------------
- * 函式：組出核定名單表格HTML
- * 版本：v1.0（2026-09-18）
- * ------------------------------------------------------------
- */
-function 組出核定名單表格HTML(arr核定名單) {
-  if (!arr核定名單 || arr核定名單.length === 0) {
-    return "<div class='empty-hint'>目前尚未產出核定名單。</div>";
-  }
-
-  var strHTML = "<table><thead><tr>" +
-    "<th>學員編號</th><th>姓名</th><th>法名</th><th>性別</th><th>組別</th><th>職稱</th>" +
-    "</tr></thead><tbody>";
-
-  arr核定名單.forEach(function (obj一筆) {
-    strHTML += "<tr>" +
-      "<td>" + 轉義HTML(obj一筆.學員編號) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.姓名) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.法名) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.性別) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.組別) + "</td>" +
-      "<td>" + 轉義HTML(obj一筆.職稱) + "</td>" +
-      "</tr>";
-  });
-
-  strHTML += "</tbody></table>";
-  return strHTML;
-}
-
-/** 版本 v1.0：載入核定名單 */
-async function 載入核定名單() {
-  const elArea = document.getElementById("approvedListArea");
-  try {
-    const objResult = await 呼叫提報API("查詢核定名單");
-    if (objResult.成功) {
-      elArea.innerHTML = 組出核定名單表格HTML(objResult.核定名單);
-    } else {
-      elArea.innerHTML = "<div class='empty-hint'>載入失敗：" + 轉義HTML(objResult.訊息 || "未知錯誤") + "</div>";
-    }
-  } catch (錯誤) {
-    console.error("載入核定名單時發生錯誤：", 錯誤);
-    elArea.innerHTML = "<div class='empty-hint'>載入時發生未預期錯誤，請重新整理頁面再試一次。</div>";
   }
 }
 
@@ -1674,9 +1435,9 @@ async function 初始化頁面() {
   document.getElementById("templeNameShow").textContent = "（" + obj登入資訊.精舍顯示名稱 + "）";
   document.getElementById("loadingNotice").style.display = "none";
   document.getElementById("mainContent").style.display = "block";
-  // 不自動載入候選清單／待複核清單／核定名單，維持各區塊原本的
-  // 「尚未顯示OO清單」提示文字，需要看明細請按各卡片的「顯示OO
-  // 清單」按鈕（2026-09-20 法師建議）。
+  // 候選清單／待複核清單／核定名單改成按「顯示OO清單」時開新分頁
+  // 前往 review-lists.html 查看，本頁不再需要載入或維護這三個區塊
+  // （2026-09-22 法師訪談決議）。
 
   // 卡片五「組長名冊管理」：組長名冊清單、截止提報開關狀態、分享網址，
   // 這三項資料量小，直接在頁面載入時就顯示，不用像其他清單一樣
