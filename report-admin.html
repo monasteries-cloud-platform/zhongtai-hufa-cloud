@@ -10,8 +10,16 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v6.0（2026-09-23）
+   * 版本：v6.1（2026-09-23）
    * 版本歷程：
+   *   - v6.1（2026-09-23，修正法師實測發現的臭蟲）：v6.0 新增的
+   *     「場次代碼」下拉選單，實測時出現同一個場次重複列出兩筆
+   *     （一筆只有代碼、一筆「代碼－場次名稱」）的現象。根本原因
+   *     是瀏覽器本身的「表單自動完成」記住了之前在這個欄位打過的
+   *     文字，跟 <datalist> 提供的候選項目同時出現在下拉清單裡，
+   *     看起來就像同一個場次重複兩筆。修正方式：input 加上
+   *     autocomplete="off"，關閉瀏覽器自己的表單記憶，只保留
+   *     <datalist> 依「查詢場次清單」動態產生的候選項目。
    *   - v6.0（2026-09-23，法師畫面標註意見：卡片四（2）「輸出至
    *     報到系統」新增「場次代碼下拉挑選」與「刪除場次」，訪談
    *     決議：場次代碼欄位改成單一下拉選單（可輸入新值，用原生
@@ -436,7 +444,7 @@
 
     <div class="desc" style="margin-top:18px;">（2）輸出至報到系統：把目前的核定名單輸出到報到系統，變成一個可以現場報到的場次。若身兼多組職務的學員在核定名單中重複多筆，只會輸出一列，其餘身兼組別會合併寫在「注意事項」欄位。場次代碼欄位可以直接從下拉選單挑選已存在的場次（挑選後即為覆蓋該場次），或輸入尚未出現過的代碼建立新場次；場次代碼若已存在，需二次確認後才會用最新核定名單覆蓋，「場次名稱」「公告文字」設定維持不變；若該場次已經有人報到過，系統會直接拒絕輸出。也可以選擇既有場次後按「刪除場次」直接移除（無論是否已有人報到，僅會再跳出一次瀏覽器確認視窗，此操作無法復原）。</div>
     <div class="step-row">
-      <input type="text" id="inputExportSessionCode" list="sessionCodeDatalist" placeholder="場次代碼（可從下拉選單挑選既有場次，或輸入新代碼）" style="max-width:280px;">
+      <input type="text" id="inputExportSessionCode" list="sessionCodeDatalist" autocomplete="off" placeholder="場次代碼（可從下拉選單挑選既有場次，或輸入新代碼）" style="max-width:280px;">
       <datalist id="sessionCodeDatalist"></datalist>
       <input type="text" id="inputExportSessionName" placeholder="場次名稱（新建立場次時必填）" style="max-width:220px;">
       <button class="action secondary" id="btnExportToCheckin" onclick="處理輸出核定名單至報到系統按鈕點擊()">輸出至報到系統</button>
