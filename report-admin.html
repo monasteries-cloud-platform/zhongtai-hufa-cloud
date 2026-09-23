@@ -10,8 +10,20 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v6.2（2026-09-23）
+   * 版本：v6.3（2026-09-23）
    * 版本歷程：
+   *   - v6.3（2026-09-23，法師訪談決議：依實際作業流程重新排列卡片
+   *     順序）：畫面上卡片一～六純粹是「顯示順序」，跟後端邏輯／
+   *     API action 名稱完全無關，因此本次只調整 HTML 卡片區塊的
+   *     排列順序與各卡片 <h2> 編號、卡片註解文字，JS 函式本身
+   *     完全沒有異動。新順序（原順序）：
+   *     一、組長名冊管理（原卡片五）→ 二、產生各組提報名單（原
+   *     卡片一）→ 三、檢核提報資料（原卡片二）→ 四、檢核聘書數
+   *     （原卡片三）→ 五、產出核定名單（原卡片四）→ 六、出席回報
+   *     管理（原卡片六，位置不變）。理由：組長名冊要先建立好，
+   *     組長才能登入線上表單開始填寫提報名單，是整個作業流程最
+   *     前置的一步，原本排在卡片五、在提報名單都填完才設定，
+   *     順序上不符合實際作業先後。
    *   - v6.2（2026-09-23，修正法師實測發現：選擇既有場次後「場次
    *     名稱」欄位沒有跟著帶出來）：新增「場次代碼」欄位的
    *     oninput 事件，選擇或輸入場次代碼時會即時查快取（新增
@@ -389,82 +401,11 @@
     </div>
   </div>
 
-  <!-- 卡片一：產生各組提報名單 -->
+  <!-- 卡片一：組長名冊管理（2026-09-21 新增；2026-09-23 法師訪談決議，依實際作業
+       流程重新排序，原「卡片五」移到最前面，因為組長名冊要先建好，組長才能登入
+       線上表單開始填寫提報名單，是整個流程最前置的步驟） -->
   <div class="card">
-    <h2>一、產生各組提報名單</h2>
-
-    <div class="desc">（1）建立匯入來源分頁：若偵測到上一期封存產生的下一期起始名單會自動沿用，否則會建立一份空白「匯入來源」分頁，請把 Excel「提報名單」的資料貼進主資料庫試算表的「匯入來源」分頁。</div>
-    <div class="step-row">
-      <button class="action" id="btnCreateImportSheet" onclick="處理建立匯入來源分頁按鈕點擊()">建立匯入來源分頁</button>
-    </div>
-
-    <div class="desc" style="margin-top:18px;">（2）產生各組提報名單：確認「匯入來源」分頁資料已經貼妥後執行，會依組別自動拆分寫入各組分頁。</div>
-    <div class="step-row">
-      <button class="action" id="btnImportReportList" onclick="處理匯入提報名單按鈕點擊()">產生各組提報名單</button>
-    </div>
-    <div class="msg" id="msgImport"></div>
-  </div>
-
-  <!-- 卡片二：檢核提報資料 -->
-  <div class="card">
-    <h2>二、檢核提報資料</h2>
-
-    <div class="desc">（1）檢核提報資料：用學員基本資料補齊姓名／法名／性別，查無資料的列會標黃提醒；同時針對組長只填姓名、沒填學員編號的情況自動反查，唯一命中會自動補回，同名多筆或查無資料會列入候選清單。</div>
-    <div class="step-row">
-      <button class="action" id="btnCheckReportData" onclick="處理檢核提報資料按鈕點擊()">檢核提報資料</button>
-    </div>
-
-    <div class="desc" style="margin-top:18px;">（2）候選清單核對回填：檢核完不會自動顯示明細，請按「顯示候選清單」開新分頁查看，核對後在候選學員編號欄位確認並回填。</div>
-    <div class="step-row">
-      <button class="action secondary" id="btnRefreshCandidateList" onclick="window.open('review-lists.html?type=candidates', '_blank')">顯示候選清單</button>
-      <button class="action secondary" id="btnDownloadCandidateList" onclick="處理下載候選清單按鈕點擊()">下載候選清單</button>
-    </div>
-    <div class="msg" id="msgMatch"></div>
-  </div>
-
-  <!-- 卡片三：檢核聘書數 -->
-  <div class="card">
-    <h2>三、檢核聘書數</h2>
-
-    <div class="desc">（1）檢核聘書數：依學員編號彙總全體職務數，超過門檻（3張聘書）的人整列標紅，並列入「待複核清單」。</div>
-    <div class="step-row">
-      <button class="action" id="btnSummarizeOverLimit" onclick="處理彙總職務數與超額標色按鈕點擊()">檢核聘書數</button>
-    </div>
-
-    <div class="desc" style="margin-top:18px;">（2）待複核清單決議：檢核完不會自動顯示明細，請按「顯示待複核清單」開新分頁查看，請法師會議逐筆針對「這一筆職務」勾選保留或取消（取消要填原因），選好後在該頁按「送出決議」一次送出。</div>
-    <div class="step-row">
-      <button class="action secondary" id="btnRefreshReviewList" onclick="window.open('review-lists.html?type=pending', '_blank')">顯示待複核清單</button>
-      <button class="action secondary" id="btnDownloadReviewList" onclick="處理下載待複核清單按鈕點擊()">下載待複核清單</button>
-    </div>
-    <div class="msg" id="msgSummarize"></div>
-  </div>
-
-  <!-- 卡片四：產出核定名單 -->
-  <div class="card">
-    <h2>四、產出核定名單</h2>
-
-    <div class="desc">（1）產出核定名單：確認「待複核清單」所有超額項目都已決議完畢後執行，系統會彙整所有有效聘任的職務、扣除決議取消的部分，產出核定名單（同步刷新原始版快照）。若還有未決議項目會提醒，不會產出。產出完不會自動顯示明細，請按「顯示核定名單」查看。</div>
-    <div class="step-row">
-      <button class="action" id="btnGenerateApprovedList" onclick="處理套用決議並產出核定名單按鈕點擊()">產出核定名單</button>
-      <button class="action secondary" id="btnRefreshApprovedList" onclick="window.open('review-lists.html?type=approved', '_blank')">顯示核定名單</button>
-      <button class="action secondary" id="btnDownloadApprovedList" onclick="處理下載核定名單按鈕點擊()">下載核定名單</button>
-    </div>
-    <div class="msg" id="msgApprovedList"></div>
-
-    <div class="desc" style="margin-top:18px;">（2）輸出至報到系統：把目前的核定名單輸出到報到系統，變成一個可以現場報到的場次。若身兼多組職務的學員在核定名單中重複多筆，只會輸出一列，其餘身兼組別會合併寫在「注意事項」欄位。場次代碼欄位可以直接從下拉選單挑選已存在的場次（挑選後即為覆蓋該場次），或輸入尚未出現過的代碼建立新場次；場次代碼若已存在，需二次確認後才會用最新核定名單覆蓋，「場次名稱」「公告文字」設定維持不變；若該場次已經有人報到過，系統會直接拒絕輸出。也可以選擇既有場次後按「刪除場次」直接移除（無論是否已有人報到，僅會再跳出一次瀏覽器確認視窗，此操作無法復原）。</div>
-    <div class="step-row">
-      <input type="text" id="inputExportSessionCode" list="sessionCodeDatalist" autocomplete="off" placeholder="場次代碼（可從下拉選單挑選既有場次，或輸入新代碼）" oninput="處理場次代碼欄位變更()" style="max-width:280px;">
-      <datalist id="sessionCodeDatalist"></datalist>
-      <input type="text" id="inputExportSessionName" placeholder="場次名稱（新建立場次時必填）" style="max-width:220px;">
-      <button class="action secondary" id="btnExportToCheckin" onclick="處理輸出核定名單至報到系統按鈕點擊()">輸出至報到系統</button>
-      <button class="action danger" id="btnDeleteSession" onclick="處理刪除場次按鈕點擊()">刪除場次</button>
-    </div>
-    <div class="msg" id="msgExportToCheckin"></div>
-  </div>
-
-  <!-- 卡片五：組長名冊管理（2026-09-21 新增） -->
-  <div class="card">
-    <h2>五、組長名冊管理</h2>
+    <h2>一、組長名冊管理</h2>
 
     <div class="desc">（1）組長填寫網址與截止提報：組長要用登錄在下方（2）「組長名冊」的 Google 帳號，才能登入「組長線上填寫提報名單」網頁表單，按「複製網址」即可分享給組長。「截止提報」是全體組別共用的總開關，開啟後所有組長的表單一律轉為唯讀，無法再新增／修改／刪除，需要異動請直接聯絡資料組協助處理。</div>
     <div class="toggle-row">
@@ -490,7 +431,80 @@
     <div class="msg" id="msgLeaderList"></div>
   </div>
 
-  <!-- 卡片六：出席回報管理（2026-09-22 新增，Module5） -->
+  <!-- 卡片二：產生各組提報名單（2026-09-23 法師訪談決議重新排序，原「卡片一」） -->
+  <div class="card">
+    <h2>二、產生各組提報名單</h2>
+
+    <div class="desc">（1）建立匯入來源分頁：若偵測到上一期封存產生的下一期起始名單會自動沿用，否則會建立一份空白「匯入來源」分頁，請把 Excel「提報名單」的資料貼進主資料庫試算表的「匯入來源」分頁。</div>
+    <div class="step-row">
+      <button class="action" id="btnCreateImportSheet" onclick="處理建立匯入來源分頁按鈕點擊()">建立匯入來源分頁</button>
+    </div>
+
+    <div class="desc" style="margin-top:18px;">（2）產生各組提報名單：確認「匯入來源」分頁資料已經貼妥後執行，會依組別自動拆分寫入各組分頁。</div>
+    <div class="step-row">
+      <button class="action" id="btnImportReportList" onclick="處理匯入提報名單按鈕點擊()">產生各組提報名單</button>
+    </div>
+    <div class="msg" id="msgImport"></div>
+  </div>
+
+  <!-- 卡片三：檢核提報資料（2026-09-23 法師訪談決議重新排序，原「卡片二」） -->
+  <div class="card">
+    <h2>三、檢核提報資料</h2>
+
+    <div class="desc">（1）檢核提報資料：用學員基本資料補齊姓名／法名／性別，查無資料的列會標黃提醒；同時針對組長只填姓名、沒填學員編號的情況自動反查，唯一命中會自動補回，同名多筆或查無資料會列入候選清單。</div>
+    <div class="step-row">
+      <button class="action" id="btnCheckReportData" onclick="處理檢核提報資料按鈕點擊()">檢核提報資料</button>
+    </div>
+
+    <div class="desc" style="margin-top:18px;">（2）候選清單核對回填：檢核完不會自動顯示明細，請按「顯示候選清單」開新分頁查看，核對後在候選學員編號欄位確認並回填。</div>
+    <div class="step-row">
+      <button class="action secondary" id="btnRefreshCandidateList" onclick="window.open('review-lists.html?type=candidates', '_blank')">顯示候選清單</button>
+      <button class="action secondary" id="btnDownloadCandidateList" onclick="處理下載候選清單按鈕點擊()">下載候選清單</button>
+    </div>
+    <div class="msg" id="msgMatch"></div>
+  </div>
+
+  <!-- 卡片四：檢核聘書數（2026-09-23 法師訪談決議重新排序，原「卡片三」） -->
+  <div class="card">
+    <h2>四、檢核聘書數</h2>
+
+    <div class="desc">（1）檢核聘書數：依學員編號彙總全體職務數，超過門檻（3張聘書）的人整列標紅，並列入「待複核清單」。</div>
+    <div class="step-row">
+      <button class="action" id="btnSummarizeOverLimit" onclick="處理彙總職務數與超額標色按鈕點擊()">檢核聘書數</button>
+    </div>
+
+    <div class="desc" style="margin-top:18px;">（2）待複核清單決議：檢核完不會自動顯示明細，請按「顯示待複核清單」開新分頁查看，請法師會議逐筆針對「這一筆職務」勾選保留或取消（取消要填原因），選好後在該頁按「送出決議」一次送出。</div>
+    <div class="step-row">
+      <button class="action secondary" id="btnRefreshReviewList" onclick="window.open('review-lists.html?type=pending', '_blank')">顯示待複核清單</button>
+      <button class="action secondary" id="btnDownloadReviewList" onclick="處理下載待複核清單按鈕點擊()">下載待複核清單</button>
+    </div>
+    <div class="msg" id="msgSummarize"></div>
+  </div>
+
+  <!-- 卡片五：產出核定名單（2026-09-23 法師訪談決議重新排序，原「卡片四」） -->
+  <div class="card">
+    <h2>五、產出核定名單</h2>
+
+    <div class="desc">（1）產出核定名單：確認「待複核清單」所有超額項目都已決議完畢後執行，系統會彙整所有有效聘任的職務、扣除決議取消的部分，產出核定名單（同步刷新原始版快照）。若還有未決議項目會提醒，不會產出。產出完不會自動顯示明細，請按「顯示核定名單」查看。</div>
+    <div class="step-row">
+      <button class="action" id="btnGenerateApprovedList" onclick="處理套用決議並產出核定名單按鈕點擊()">產出核定名單</button>
+      <button class="action secondary" id="btnRefreshApprovedList" onclick="window.open('review-lists.html?type=approved', '_blank')">顯示核定名單</button>
+      <button class="action secondary" id="btnDownloadApprovedList" onclick="處理下載核定名單按鈕點擊()">下載核定名單</button>
+    </div>
+    <div class="msg" id="msgApprovedList"></div>
+
+    <div class="desc" style="margin-top:18px;">（2）輸出至報到系統：把目前的核定名單輸出到報到系統，變成一個可以現場報到的場次。若身兼多組職務的學員在核定名單中重複多筆，只會輸出一列，其餘身兼組別會合併寫在「注意事項」欄位。場次代碼欄位可以直接從下拉選單挑選已存在的場次（挑選後即為覆蓋該場次），或輸入尚未出現過的代碼建立新場次；場次代碼若已存在，需二次確認後才會用最新核定名單覆蓋，「場次名稱」「公告文字」設定維持不變；若該場次已經有人報到過，系統會直接拒絕輸出。也可以選擇既有場次後按「刪除場次」直接移除（無論是否已有人報到，僅會再跳出一次瀏覽器確認視窗，此操作無法復原）。</div>
+    <div class="step-row">
+      <input type="text" id="inputExportSessionCode" list="sessionCodeDatalist" autocomplete="off" placeholder="場次代碼（可從下拉選單挑選既有場次，或輸入新代碼）" oninput="處理場次代碼欄位變更()" style="max-width:280px;">
+      <datalist id="sessionCodeDatalist"></datalist>
+      <input type="text" id="inputExportSessionName" placeholder="場次名稱（新建立場次時必填）" style="max-width:220px;">
+      <button class="action secondary" id="btnExportToCheckin" onclick="處理輸出核定名單至報到系統按鈕點擊()">輸出至報到系統</button>
+      <button class="action danger" id="btnDeleteSession" onclick="處理刪除場次按鈕點擊()">刪除場次</button>
+    </div>
+    <div class="msg" id="msgExportToCheckin"></div>
+  </div>
+
+  <!-- 卡片六：出席回報管理（2026-09-22 新增，Module5；順序不變，仍在最後） -->
   <div class="card">
     <h2>六、出席回報管理</h2>
 
