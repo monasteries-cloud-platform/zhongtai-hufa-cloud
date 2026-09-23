@@ -10,8 +10,13 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v5.3（2026-09-23）
+   * 版本：v5.4（2026-09-23）
    * 版本歷程：
+   *   - v5.4（2026-09-23，法師建議：v5.3 改成（1）（2）分段後，
+   *     說明文字已經有次第編號，按鈕上的①②數字顯得多餘）：卡片
+   *     一～四各按鈕文字移除開頭的①②，只保留文字（「① 建立匯入
+   *     來源分頁」→「建立匯入來源分頁」等），純顯示文字調整，
+   *     按鈕 id／onclick 完全未變動。
    *   - v5.3（2026-09-23，法師建議：卡片一～五樣式比照卡片六）：
    *     卡片一～五原本一整段「說明」文字混著多個步驟，改成比照
    *     卡片六的做法，用「（1）（2）……」把每張卡片拆成幾個有次第
@@ -360,12 +365,12 @@
 
     <div class="desc">（1）建立匯入來源分頁：若偵測到上一期封存產生的下一期起始名單會自動沿用，否則會建立一份空白「匯入來源」分頁，請把 Excel「提報名單」的資料貼進主資料庫試算表的「匯入來源」分頁。</div>
     <div class="step-row">
-      <button class="action" id="btnCreateImportSheet" onclick="處理建立匯入來源分頁按鈕點擊()">① 建立匯入來源分頁</button>
+      <button class="action" id="btnCreateImportSheet" onclick="處理建立匯入來源分頁按鈕點擊()">建立匯入來源分頁</button>
     </div>
 
     <div class="desc" style="margin-top:18px;">（2）產生各組提報名單：確認「匯入來源」分頁資料已經貼妥後執行，會依組別自動拆分寫入各組分頁。</div>
     <div class="step-row">
-      <button class="action" id="btnImportReportList" onclick="處理匯入提報名單按鈕點擊()">② 產生各組提報名單</button>
+      <button class="action" id="btnImportReportList" onclick="處理匯入提報名單按鈕點擊()">產生各組提報名單</button>
     </div>
     <div class="msg" id="msgImport"></div>
   </div>
@@ -376,7 +381,7 @@
 
     <div class="desc">（1）檢核提報資料：用學員基本資料補齊姓名／法名／性別，查無資料的列會標黃提醒；同時針對組長只填姓名、沒填學員編號的情況自動反查，唯一命中會自動補回，同名多筆或查無資料會列入候選清單。</div>
     <div class="step-row">
-      <button class="action" id="btnCheckReportData" onclick="處理檢核提報資料按鈕點擊()">① 檢核提報資料</button>
+      <button class="action" id="btnCheckReportData" onclick="處理檢核提報資料按鈕點擊()">檢核提報資料</button>
     </div>
 
     <div class="desc" style="margin-top:18px;">（2）候選清單核對回填：檢核完不會自動顯示明細，請按「顯示候選清單」開新分頁查看，核對後在候選學員編號欄位確認並回填。</div>
@@ -393,7 +398,7 @@
 
     <div class="desc">（1）檢核聘書數：依學員編號彙總全體職務數，超過門檻（3張聘書）的人整列標紅，並列入「待複核清單」。</div>
     <div class="step-row">
-      <button class="action" id="btnSummarizeOverLimit" onclick="處理彙總職務數與超額標色按鈕點擊()">① 檢核聘書數</button>
+      <button class="action" id="btnSummarizeOverLimit" onclick="處理彙總職務數與超額標色按鈕點擊()">檢核聘書數</button>
     </div>
 
     <div class="desc" style="margin-top:18px;">（2）待複核清單決議：檢核完不會自動顯示明細，請按「顯示待複核清單」開新分頁查看，請法師會議逐筆針對「這一筆職務」勾選保留或取消（取消要填原因），選好後在該頁按「送出決議」一次送出。</div>
@@ -410,7 +415,7 @@
 
     <div class="desc">（1）產出核定名單：確認「待複核清單」所有超額項目都已決議完畢後執行，系統會彙整所有有效聘任的職務、扣除決議取消的部分，產出核定名單（同步刷新原始版快照）。若還有未決議項目會提醒，不會產出。產出完不會自動顯示明細，請按「顯示核定名單」查看。</div>
     <div class="step-row">
-      <button class="action" id="btnGenerateApprovedList" onclick="處理套用決議並產出核定名單按鈕點擊()">① 產出核定名單</button>
+      <button class="action" id="btnGenerateApprovedList" onclick="處理套用決議並產出核定名單按鈕點擊()">產出核定名單</button>
       <button class="action secondary" id="btnRefreshApprovedList" onclick="window.open('review-lists.html?type=approved', '_blank')">顯示核定名單</button>
       <button class="action secondary" id="btnDownloadApprovedList" onclick="處理下載核定名單按鈕點擊()">下載核定名單</button>
     </div>
