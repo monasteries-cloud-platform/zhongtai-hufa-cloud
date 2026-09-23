@@ -10,8 +10,21 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v5.4（2026-09-23）
+   * 版本：v6.0（2026-09-23）
    * 版本歷程：
+   *   - v6.0（2026-09-23，法師畫面標註意見：卡片四（2）「輸出至
+   *     報到系統」新增「場次代碼下拉挑選」與「刪除場次」，訪談
+   *     決議：場次代碼欄位改成單一下拉選單（可輸入新值，用原生
+   *     input+datalist 元件實作）；刪除場次不檢查是否已有人報到、
+   *     只要選了就能刪，但要跳出瀏覽器二次確認；刪除時一併移除
+   *     「場次設定」分頁對應的那一列設定）：新增「刪除場次」
+   *     按鈕與「場次代碼」輸入框旁的 <datalist>；新增函式
+   *     載入報到場次清單／處理刪除場次按鈕點擊／呼叫報到API
+   *     （直接沿用報到系統既有的 system:"報到" action"查詢場次
+   *     清單"／"刪除場次"，這兩個 action 後端本來就已經存在，
+   *     本次未新增或修改任何 .gs 後端程式碼，純前端串接既有
+   *     action）；頁面載入與「輸出至報到系統」成功後都會重新
+   *     呼叫 載入報到場次清單，讓下拉選單保持最新。
    *   - v5.4（2026-09-23，法師建議：v5.3 改成（1）（2）分段後，
    *     說明文字已經有次第編號，按鈕上的①②數字顯得多餘）：卡片
    *     一～四各按鈕文字移除開頭的①②，只保留文字（「① 建立匯入
@@ -421,11 +434,13 @@
     </div>
     <div class="msg" id="msgApprovedList"></div>
 
-    <div class="desc" style="margin-top:18px;">（2）輸出至報到系統：把目前的核定名單輸出到報到系統，變成一個可以現場報到的場次。若身兼多組職務的學員在核定名單中重複多筆，只會輸出一列，其餘身兼組別會合併寫在「注意事項」欄位。場次代碼若已存在，需二次確認後才會用最新核定名單覆蓋；若該場次已經有人報到過，系統會直接拒絕輸出。</div>
+    <div class="desc" style="margin-top:18px;">（2）輸出至報到系統：把目前的核定名單輸出到報到系統，變成一個可以現場報到的場次。若身兼多組職務的學員在核定名單中重複多筆，只會輸出一列，其餘身兼組別會合併寫在「注意事項」欄位。場次代碼欄位可以直接從下拉選單挑選已存在的場次（挑選後即為覆蓋該場次），或輸入尚未出現過的代碼建立新場次；場次代碼若已存在，需二次確認後才會用最新核定名單覆蓋，「場次名稱」「公告文字」設定維持不變；若該場次已經有人報到過，系統會直接拒絕輸出。也可以選擇既有場次後按「刪除場次」直接移除（無論是否已有人報到，僅會再跳出一次瀏覽器確認視窗，此操作無法復原）。</div>
     <div class="step-row">
-      <input type="text" id="inputExportSessionCode" placeholder="場次代碼（例如 1025）" style="max-width:160px;">
+      <input type="text" id="inputExportSessionCode" list="sessionCodeDatalist" placeholder="場次代碼（可從下拉選單挑選既有場次，或輸入新代碼）" style="max-width:280px;">
+      <datalist id="sessionCodeDatalist"></datalist>
       <input type="text" id="inputExportSessionName" placeholder="場次名稱（新建立場次時必填）" style="max-width:220px;">
       <button class="action secondary" id="btnExportToCheckin" onclick="處理輸出核定名單至報到系統按鈕點擊()">輸出至報到系統</button>
+      <button class="action danger" id="btnDeleteSession" onclick="處理刪除場次按鈕點擊()">刪除場次</button>
     </div>
     <div class="msg" id="msgExportToCheckin"></div>
   </div>
@@ -598,6 +613,34 @@ async function 呼叫提報API(str動作, obj額外參數) {
 
   const obj請求內容 = Object.assign(
     { system: "提報", action: str動作, token: obj登入資訊.token },
+    obj額外參數 || {}
+  );
+  return await 呼叫後端API(obj請求內容);
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：呼叫報到API
+ * 版本：v1.0（2026-09-23，新增，供卡片四（2）「輸出至報到系統」
+ *       子區塊查詢既有場次清單／刪除場次使用）
+ * 用途：統一組裝 system:"報到" 的請求物件並附上目前登入 token，
+ *       沿用跟「呼叫提報API」一樣的登入 token（報到系統跟提報
+ *       系統共用同一套精舍登入狀態，不需要另外登入）。
+ * 參數：
+ *   str動作     - action 名稱（例如 "查詢場次清單"）
+ *   obj額外參數 - 該 action 需要的其他參數物件（可省略）
+ * 回傳：Promise，resolve 為後端回傳的物件
+ * ------------------------------------------------------------
+ */
+async function 呼叫報到API(str動作, obj額外參數) {
+  const obj登入資訊 = 取得目前登入精舍資訊();
+  if (!obj登入資訊) {
+    window.location.href = "login.html";
+    return { 成功: false, 訊息: "登入狀態已失效，請重新登入。" };
+  }
+
+  const obj請求內容 = Object.assign(
+    { system: "報到", action: str動作, token: obj登入資訊.token },
     obj額外參數 || {}
   );
   return await 呼叫後端API(obj請求內容);
@@ -895,16 +938,50 @@ async function 處理下載核定名單按鈕點擊() {
 
 /**
  * ------------------------------------------------------------
+ * 函式：載入報到場次清單
+ * 版本：v1.0（2026-09-23，法師畫面標註意見：「場次代碼」欄位改用
+ *       下拉式挑選既有場次）
+ * 用途：查詢報到系統目前所有既有場次，填進「場次代碼」輸入框旁的
+ *       <datalist>，讓資料組打字時可以直接看到既有場次代碼（含
+ *       場次名稱提示）點選，也可以繼續直接輸入尚未出現過的新代碼
+ *       （原生 input+datalist 元件本來就同時支援這兩種操作，不需要
+ *       額外的下拉選單元件）。頁面載入時、以及「輸出至報到系統」
+ *       「刪除場次」成功之後都會重新呼叫一次，讓清單保持最新。
+ * ------------------------------------------------------------
+ */
+async function 載入報到場次清單() {
+  const elDatalist = document.getElementById("sessionCodeDatalist");
+  try {
+    const objResult = await 呼叫報到API("查詢場次清單");
+    elDatalist.innerHTML = "";
+    if (objResult.成功 && objResult.場次清單) {
+      objResult.場次清單.forEach(function (obj場次) {
+        const elOption = document.createElement("option");
+        elOption.value = obj場次.場次代碼;
+        elOption.label = obj場次.場次名稱 ? (obj場次.場次代碼 + "－" + obj場次.場次名稱) : String(obj場次.場次代碼);
+        elDatalist.appendChild(elOption);
+      });
+    }
+  } catch (錯誤) {
+    console.error("載入報到場次清單時發生錯誤：", 錯誤);
+  }
+}
+
+/**
+ * ------------------------------------------------------------
  * 函式：處理輸出核定名單至報到系統按鈕點擊
- * 版本：v1.0（2026-09-22，新增，「報到系統輸出」功能，2026-09-21～
- *       22 訪談決議）
- * 用途：把目前的核定名單，轉成報到系統可以報到的一個新場次（或
- *       覆蓋一個尚未有人報到的既有場次）。先以「確認覆蓋:false」
- *       呼叫一次；若後端回應「需要確認覆蓋」（場次代碼已存在但
- *       尚無人報到），跳出瀏覽器確認視窗讓資料組二次確認後，才
- *       帶「確認覆蓋:true」重新呼叫一次；若場次已經有人報到過，
- *       後端會直接拒絕，這裡把訊息原樣顯示給資料組看，不會跳出
- *       二次確認視窗。
+ * 版本：v1.1（2026-09-23，法師畫面標註意見）
+ * 版本歷程：
+ *   - v1.0（2026-09-22，新增，「報到系統輸出」功能，2026-09-21～
+ *     22 訪談決議）：把目前的核定名單，轉成報到系統可以報到的
+ *     一個新場次（或覆蓋一個尚未有人報到的既有場次）。先以「確認
+ *     覆蓋:false」呼叫一次；若後端回應「需要確認覆蓋」（場次代碼
+ *     已存在但尚無人報到），跳出瀏覽器確認視窗讓資料組二次確認
+ *     後，才帶「確認覆蓋:true」重新呼叫一次；若場次已經有人報到
+ *     過，後端會直接拒絕，這裡把訊息原樣顯示給資料組看，不會跳出
+ *     二次確認視窗。
+ *   - v1.1（2026-09-23）：成功後（不論新建立或覆蓋）重新呼叫
+ *     載入報到場次清單，讓「場次代碼」下拉選單立即反映最新場次。
  * ------------------------------------------------------------
  */
 async function 處理輸出核定名單至報到系統按鈕點擊() {
@@ -912,7 +989,7 @@ async function 處理輸出核定名單至報到系統按鈕點擊() {
   const str場次名稱 = document.getElementById("inputExportSessionName").value.trim();
 
   if (!str場次代碼) {
-    顯示區塊訊息("msgExportToCheckin", "請先輸入場次代碼。", "error");
+    顯示區塊訊息("msgExportToCheckin", "請先輸入或選擇場次代碼。", "error");
     return;
   }
 
@@ -942,8 +1019,58 @@ async function 處理輸出核定名單至報到系統按鈕點擊() {
     }
 
     顯示區塊訊息("msgExportToCheckin", objResult.訊息 || (objResult.成功 ? "輸出完成。" : "輸出失敗。"), objResult.成功 ? "success" : "error");
+    if (objResult.成功) {
+      await 載入報到場次清單();
+    }
   } catch (錯誤) {
     console.error("輸出核定名單至報到系統時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgExportToCheckin", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理刪除場次按鈕點擊
+ * 版本：v1.0（2026-09-23，法師畫面標註意見：新增「刪除已存在場次」
+ *       功能，訪談決議：不檢查是否已有人報到，只要選了就能刪，
+ *       但要跳出瀏覽器二次確認；刪除時一併移除「場次設定」分頁
+ *       裡對應的那一列設定）
+ * 用途：直接沿用報到系統既有的「刪除場次」action（該 action 本來
+ *       就是「刪分頁＋刪場次設定列」一次到位，不檢查報到狀態），
+ *       這裡只負責取得畫面上輸入／選擇的場次代碼，跳出瀏覽器確認
+ *       視窗二次確認後才送出；成功後清空輸入框並重新載入場次清單。
+ * ------------------------------------------------------------
+ */
+async function 處理刪除場次按鈕點擊() {
+  const str場次代碼 = document.getElementById("inputExportSessionCode").value.trim();
+  if (!str場次代碼) {
+    顯示區塊訊息("msgExportToCheckin", "請先輸入或從下拉選單選擇要刪除的場次代碼。", "error");
+    return;
+  }
+
+  const bool確認 = window.confirm(
+    "確定要刪除場次「" + str場次代碼 + "」嗎？\n\n此操作無法復原，會一併清除該場次的報到名單與設定" +
+    "（不論這個場次目前有沒有人已經報到過都會直接刪除）。"
+  );
+  if (!bool確認) {
+    return;
+  }
+
+  const btn = document.getElementById("btnDeleteSession");
+  btn.disabled = true;
+  顯示區塊訊息("msgExportToCheckin", "刪除中，請稍候...", "info");
+
+  try {
+    const objResult = await 呼叫報到API("刪除場次", { 場次代碼: str場次代碼 });
+    顯示區塊訊息("msgExportToCheckin", objResult.訊息 || (objResult.成功 ? "刪除成功。" : "刪除失敗。"), objResult.成功 ? "success" : "error");
+    if (objResult.成功) {
+      document.getElementById("inputExportSessionCode").value = "";
+      await 載入報到場次清單();
+    }
+  } catch (錯誤) {
+    console.error("刪除場次時發生未預期錯誤：", 錯誤);
     顯示區塊訊息("msgExportToCheckin", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
   } finally {
     btn.disabled = false;
@@ -1476,6 +1603,10 @@ async function 初始化頁面() {
   // 候選清單／待複核清單／核定名單改成按「顯示OO清單」時開新分頁
   // 前往 review-lists.html 查看，本頁不再需要載入或維護這三個區塊
   // （2026-09-22 法師訪談決議）。
+
+  // 卡片四（2）「輸出至報到系統」：頁面載入時先查一次目前既有場次清單，
+  // 填進「場次代碼」欄位旁的下拉選單（2026-09-23 法師畫面標註意見新增）。
+  載入報到場次清單();
 
   // 卡片五「組長名冊管理」：組長名冊清單、截止提報開關狀態、分享網址，
   // 這三項資料量小，直接在頁面載入時就顯示，不用像其他清單一樣
