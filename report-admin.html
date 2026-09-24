@@ -10,8 +10,21 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v6.4（2026-09-24）
+   * 版本：v6.5（2026-09-24）
    * 版本歷程：
+   *   - v6.5（2026-09-24，法師訪談決議，新增「上傳 Excel 檔案」
+   *     功能）：「二、產生各組提報名單」分頁新增（1b）「上傳 Excel
+   *     檔案」步驟，可直接上傳 Excel「提報名單（精簡版）」檔案，
+   *     瀏覽器端用既有已載入的 SheetJS 解析出「學員編號／姓名／
+   *     法名／新任護法會職稱」四欄（新增函式 解析提報名單Excel檔案），
+   *     呼叫新的後端 action "上傳Excel建立匯入來源"（新增函式
+   *     處理上傳Excel建立匯入來源按鈕點擊），由後端自動轉換欄位
+   *     格式並寫入「匯入來源」分頁。本期匯入來源（上傳 Excel／沿用
+   *     上一期封存的下一期起始名單）互斥，「匯入來源」已有資料時
+   *     一律先跳出確認視窗才覆蓋（訊息會註明是否為上一期起始名單）。
+   *     （1）原本的「建立匯入來源分頁」按鈕文字調整為「建立匯入來源
+   *     分頁（沿用上一期／貼上資料用）」，並更新說明文字釐清兩種
+   *     來源二選一的關係；其餘既有函式與 action 完全未變動。
    *   - v6.4（2026-09-24，法師確認「卡片式改成索引式」）：操作介面
    *     由「6 張卡片全部堆疊在同一頁、往下捲動」改為「畫面上方橫向
    *     分頁籤（Tab）」，6 個分頁對應原本的 6 張卡片，順序沿用
@@ -484,12 +497,19 @@
   <div class="card">
     <h2>二、產生各組提報名單</h2>
 
-    <div class="desc">（1）建立匯入來源分頁：若偵測到上一期封存產生的下一期起始名單會自動沿用，否則會建立一份空白「匯入來源」分頁，請把 Excel「提報名單」的資料貼進主資料庫試算表的「匯入來源」分頁。</div>
+    <div class="desc">（1）本期匯入來源二選一：若這期要接續上一期封存產生的「下一期起始名單」微調，用下面「建立匯入來源分頁」（會自動偵測沿用）；若這期改用資料組整理好的最新 Excel 名單，用「上傳 Excel 檔案」直接匯入。兩者互斥，「匯入來源」分頁已經有資料時，不論哪一種都會先跳出確認視窗才覆蓋。</div>
     <div class="step-row">
-      <button class="action" id="btnCreateImportSheet" onclick="處理建立匯入來源分頁按鈕點擊()">建立匯入來源分頁</button>
+      <button class="action" id="btnCreateImportSheet" onclick="處理建立匯入來源分頁按鈕點擊()">建立匯入來源分頁（沿用上一期／貼上資料用）</button>
     </div>
 
-    <div class="desc" style="margin-top:18px;">（2）產生各組提報名單：確認「匯入來源」分頁資料已經貼妥後執行，會依組別自動拆分寫入各組分頁。</div>
+    <div class="desc" style="margin-top:12px;">（1b）上傳 Excel 檔案：選擇 Excel「提報名單（精簡版）」檔案後按下方按鈕，系統會自動建立/沿用「匯入來源」分頁，並依欄位名稱轉換好格式寫入（欄位順序、檔案裡有沒有多餘欄位都沒關係；「組別」會用「新任護法會職稱」反查「職務清單」自動帶出，查無對應的會先匯入、組別留空，事後再手動補）。</div>
+    <div class="step-row">
+      <input type="file" id="inputImportExcelFile" accept=".xlsx,.xls">
+      <button class="action" id="btnUploadImportExcel" onclick="處理上傳Excel建立匯入來源按鈕點擊()">上傳並建立匯入來源</button>
+    </div>
+    <div class="msg" id="msgUploadImport"></div>
+
+    <div class="desc" style="margin-top:18px;">（2）產生各組提報名單：確認「匯入來源」分頁資料已經備妥（不論是貼上的、沿用上一期的、還是剛上傳 Excel 轉換好的）後執行，會依組別自動拆分寫入各組分頁。</div>
     <div class="step-row">
       <button class="action" id="btnImportReportList" onclick="處理匯入提報名單按鈕點擊()">產生各組提報名單</button>
     </div>
@@ -782,6 +802,156 @@ async function 處理建立匯入來源分頁按鈕點擊() {
   } catch (錯誤) {
     console.error("建立匯入來源分頁時發生未預期錯誤：", 錯誤);
     顯示區塊訊息("msgImport", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：解析提報名單Excel檔案
+ * 版本：v1.0（2026-09-24，法師訪談決議新增）
+ * 用途：讀取「提報名單（精簡版）」Excel 檔案（用 SheetJS 解析），
+ *       自動找出標題列（不一定是第一列，例如精簡版檔案第一列是
+ *       合併儲存格的大標題，第二列才是欄位名稱），依欄位名稱取出
+ *       「學員編號／姓名／法名／新任護法會職稱」四欄，欄位順序、
+ *       是否夾雜其他多餘欄位都不影響（例如姓名版／組別版還會多帶
+ *       身分證字號、出生日期等欄位，一律忽略，不會上傳到後端）。
+ * 參數：file - <input type="file"> 選取的檔案物件
+ * 回傳：Promise，resolve 為 [{ 學員編號, 姓名, 法名, 新任護法會職稱 }, ...]
+ * ------------------------------------------------------------
+ */
+function 解析提報名單Excel檔案(file) {
+  return new Promise(function (resolve, reject) {
+    const reader = new FileReader();
+    reader.onerror = function () { reject(new Error("讀取檔案失敗，請確認檔案未毀損。")); };
+    reader.onload = function (e) {
+      try {
+        const 資料 = new Uint8Array(e.target.result);
+        const 活頁簿 = XLSX.read(資料, { type: "array" });
+        const 工作表 = 活頁簿.Sheets[活頁簿.SheetNames[0]];
+        const arr整表 = XLSX.utils.sheet_to_json(工作表, { header: 1, defval: "" });
+
+        // 找出標題列：往前幾列裡找同時包含「學員編號」「姓名」的那一列
+        const ARR必要欄位 = ["學員編號", "姓名", "法名", "新任護法會職稱"];
+        let int標題列索引 = -1;
+        for (let i = 0; i < Math.min(arr整表.length, 5); i++) {
+          const arr這列 = (arr整表[i] || []).map(function (v) { return String(v || "").trim(); });
+          if (arr這列.indexOf("學員編號") !== -1 && arr這列.indexOf("姓名") !== -1) {
+            int標題列索引 = i;
+            break;
+          }
+        }
+        if (int標題列索引 === -1) {
+          reject(new Error("在檔案前幾列找不到包含「學員編號」「姓名」的標題列，請確認上傳的是正確的提報名單 Excel 檔案。"));
+          return;
+        }
+
+        const arr標題 = arr整表[int標題列索引].map(function (v) { return String(v || "").trim(); });
+        const obj欄位索引 = {};
+        ARR必要欄位.forEach(function (str欄位) { obj欄位索引[str欄位] = arr標題.indexOf(str欄位); });
+        if (obj欄位索引.學員編號 === -1 || obj欄位索引.姓名 === -1) {
+          reject(new Error("檔案標題列缺少「學員編號」或「姓名」欄位，請確認上傳的是正確的提報名單 Excel 檔案。"));
+          return;
+        }
+
+        const arr資料列 = [];
+        for (let i = int標題列索引 + 1; i < arr整表.length; i++) {
+          const arr這列 = arr整表[i];
+          if (!arr這列 || arr這列.length === 0) { continue; }
+          const 取值 = function (str欄位) {
+            const int索引 = obj欄位索引[str欄位];
+            return int索引 !== -1 ? String(arr這列[int索引] || "").trim() : "";
+          };
+          const str學員編號 = 取值("學員編號");
+          const str姓名 = 取值("姓名");
+          if (!str學員編號 && !str姓名) { continue; }
+          arr資料列.push({
+            學員編號: str學員編號,
+            姓名: str姓名,
+            法名: 取值("法名"),
+            新任護法會職稱: 取值("新任護法會職稱")
+          });
+        }
+        resolve(arr資料列);
+      } catch (錯誤) {
+        reject(錯誤);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理上傳Excel建立匯入來源按鈕點擊
+ * 版本：v1.0（2026-09-24，法師訪談決議新增）
+ * 用途：讀取資料組選擇的 Excel「提報名單（精簡版）」檔案，於瀏覽器
+ *       端用 SheetJS 解析出「學員編號／姓名／法名／新任護法會職稱」
+ *       四欄資料，送到後端一次完成「建立/沿用匯入來源分頁＋轉換
+ *       欄位＋寫入資料」。若「匯入來源」分頁已有資料（不論是舊資料
+ *       還是剛沿用的上一期起始名單），後端會先回傳「需要確認覆蓋」，
+ *       此時跳出瀏覽器確認視窗（訊息會註明是否為上一期起始名單），
+ *       使用者按確定才會帶著「確認覆蓋」旗標重新呼叫一次。
+ * ------------------------------------------------------------
+ */
+async function 處理上傳Excel建立匯入來源按鈕點擊() {
+  const inputFile = document.getElementById("inputImportExcelFile");
+  const btn = document.getElementById("btnUploadImportExcel");
+  const file = inputFile.files && inputFile.files[0];
+  if (!file) {
+    顯示區塊訊息("msgUploadImport", "請先選擇要上傳的 Excel 檔案。", "error");
+    return;
+  }
+
+  btn.disabled = true;
+  顯示區塊訊息("msgUploadImport", "讀取 Excel 檔案中，請稍候...", "info");
+
+  try {
+    const arr資料列 = await 解析提報名單Excel檔案(file);
+    if (arr資料列.length === 0) {
+      顯示區塊訊息("msgUploadImport", "Excel 檔案裡沒有讀到任何資料列，請確認檔案內容。", "error");
+      return;
+    }
+
+    顯示區塊訊息("msgUploadImport", "上傳中，請稍候...", "info");
+    let objResult = await 呼叫提報API("上傳Excel建立匯入來源", { 資料列: arr資料列, 確認覆蓋: false });
+
+    if (objResult.需要確認覆蓋) {
+      const str來源說明 = objResult.現有資料是否為上一期起始名單
+        ? "（這份資料是上一期封存自動延續的「下一期起始名單」）"
+        : "";
+      const bool確認 = window.confirm(
+        "「匯入來源」分頁目前已經有 " + objResult.現有筆數 + " 筆資料" + str來源說明 +
+        "，上傳這份 Excel 會整批覆蓋掉，確定要繼續嗎？"
+      );
+      if (!bool確認) {
+        顯示區塊訊息("msgUploadImport", "已取消，原本的「匯入來源」資料未被更動。", "info");
+        return;
+      }
+      顯示區塊訊息("msgUploadImport", "覆蓋寫入中，請稍候...", "info");
+      objResult = await 呼叫提報API("上傳Excel建立匯入來源", { 資料列: arr資料列, 確認覆蓋: true });
+    }
+
+    if (objResult.成功) {
+      let str訊息 = "上傳完成，共寫入 " + objResult.已寫入筆數 + " 筆到「匯入來源」分頁。";
+      if (objResult.查無組別清單 && objResult.查無組別清單.length > 0) {
+        const arr樣本 = objResult.查無組別清單.slice(0, 5).map(function (o) { return o.姓名 + "／" + o.新任護法會職稱; });
+        let str清單文字 = arr樣本.join("、");
+        if (objResult.查無組別清單.length > 5) { str清單文字 += " 等"; }
+        str訊息 += "其中有 " + objResult.查無組別清單.length +
+          " 筆的「新任護法會職稱」在「職務清單」查不到對應組別，組別欄位已留空，請到「匯入來源」分頁手動補上（" +
+          str清單文字 + "）。";
+      }
+      str訊息 += "接著可以直接執行下方「產生各組提報名單」。";
+      顯示區塊訊息("msgUploadImport", str訊息, (objResult.查無組別清單 && objResult.查無組別清單.length > 0) ? "info" : "success");
+      inputFile.value = "";
+    } else {
+      顯示區塊訊息("msgUploadImport", objResult.訊息 || "上傳失敗，請確認檔案內容或稍後再試。", "error");
+    }
+  } catch (錯誤) {
+    console.error("上傳 Excel 建立匯入來源時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgUploadImport", "讀取或上傳 Excel 檔案時發生未預期錯誤：" + 錯誤.message, "error");
   } finally {
     btn.disabled = false;
   }
