@@ -8,8 +8,14 @@
   /*
    * ============================================================
    * 檔案：精舍後台管理頁面
-   * 版本：v2.0（2026-09-24）
+   * 版本：v2.1（2026-09-24）
    * 版本歷程：
+   *   - v2.1（2026-09-24，法師確認「卡片式改成索引式」）：
+   *     操作介面由「4 張卡片全部堆疊在同一頁、往下捲動」改為「畫面
+   *     上方橫向分頁籤（Tab）」，4 個分頁對應原本的 4 張卡片：修改
+   *     精舍密碼／自動建立試算表／試算表 ID 設定／封存並開始下一期，
+   *     一次只顯示一個分頁的內容。純畫面配置調整，各分頁內部的欄位、
+   *     按鈕、載入與送出邏輯完全未變動，也未新增或移除任何功能。
    *   - v2.0（2026-09-24，法師訪談決議，Module8「歷史封存與下一期
    *     輸出」＋試算表架構調整）：
    *     1. 「試算表ID設定」卡片（原卡片三）從 6 欄縮減為 3 欄
@@ -86,6 +92,34 @@
     font-size: 13px;
   }
   #btnLogout:hover { background: #555; }
+
+  /* 上方橫向分頁籤（2026-09-24 新增：卡片式改為索引式介面） */
+  .tabbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 18px;
+    border-bottom: 2px solid #d8dee8;
+  }
+  .tabbar button {
+    padding: 9px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #667;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    margin-bottom: -2px;
+  }
+  .tabbar button:hover { color: #2E5395; }
+  .tabbar button.active {
+    color: #1F3864;
+    font-weight: bold;
+    border-bottom-color: #2E5395;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
 
   .card {
     background: #fff;
@@ -175,7 +209,16 @@
     </div>
   </div>
 
-  <!-- 卡片一：修改密碼 -->
+  <!-- 上方橫向分頁籤：4 個分頁對應原本的 4 張卡片 -->
+  <div class="tabbar" id="tabBar">
+    <button class="active" id="tabBtn-pwd" onclick="切換分頁籤('pwd')">修改精舍密碼</button>
+    <button id="tabBtn-autocreate" onclick="切換分頁籤('autocreate')">自動建立試算表</button>
+    <button id="tabBtn-sheets" onclick="切換分頁籤('sheets')">試算表 ID 設定</button>
+    <button id="tabBtn-archive" onclick="切換分頁籤('archive')">封存並開始下一期</button>
+  </div>
+
+  <!-- 分頁一：修改密碼 -->
+  <div class="tab-panel active" id="tabPanel-pwd">
   <div class="card">
     <h2>修改精舍密碼</h2>
     <div class="desc">
@@ -194,8 +237,11 @@
     <button class="action" id="btnChangePassword" onclick="處理修改密碼按鈕點擊()">修改密碼</button>
     <div class="msg" id="msgChangePassword"></div>
   </div>
+  </div>
+  <!-- 分頁一結束 -->
 
-  <!-- 卡片二：自動建立試算表 -->
+  <!-- 分頁二：自動建立試算表 -->
+  <div class="tab-panel" id="tabPanel-autocreate">
   <div class="card">
     <h2>自動建立試算表</h2>
     <div class="desc">
@@ -215,8 +261,11 @@
     <button class="action" id="btnAutoCreate" onclick="處理自動建立試算表按鈕點擊()">自動建立試算表</button>
     <div class="msg" id="msgAutoCreate"></div>
   </div>
+  </div>
+  <!-- 分頁二結束 -->
 
-  <!-- 卡片三：試算表 ID 設定（手動救援/微調用途） -->
+  <!-- 分頁三：試算表 ID 設定（手動救援/微調用途） -->
+  <div class="tab-panel" id="tabPanel-sheets">
   <div class="card">
     <h2>試算表 ID 設定</h2>
     <div class="desc">
@@ -239,8 +288,11 @@
     <button class="action" id="btnSaveSheets" onclick="處理儲存試算表ID按鈕點擊()">儲存試算表 ID 設定</button>
     <div class="msg" id="msgSaveSheets"></div>
   </div>
+  </div>
+  <!-- 分頁三結束 -->
 
-  <!-- 卡片四：封存並開始下一期（2026-09-24 新增，Module8） -->
+  <!-- 分頁四：封存並開始下一期（2026-09-24 新增，Module8） -->
+  <div class="tab-panel" id="tabPanel-archive">
   <div class="card">
     <h2>封存並開始下一期</h2>
     <div class="desc">
@@ -262,6 +314,8 @@
     </select>
     <div class="msg" id="msgArchiveHistory"></div>
   </div>
+  </div>
+  <!-- 分頁四結束 -->
 
 </div>
 
@@ -279,6 +333,34 @@ const ARR_試算表欄位名稱 = [
   "學員基本資料試算表ID",
   "精舍資料夾ID"
 ];
+
+/**
+ * ------------------------------------------------------------
+ * 函式：切換分頁籤
+ * 版本：v1.0（2026-09-24）
+ * 用途：畫面從「卡片全部堆疊在同一頁」改為「上方橫向分頁籤」後，
+ *       負責切換目前顯示哪一個分頁內容區塊，並同步分頁籤按鈕的
+ *       選取樣式（.active）。純畫面切換，不牽動任何資料載入或
+ *       後端 API 呼叫——各分頁原本的按鈕、載入邏輯完全不變。
+ * 參數：
+ *   str分頁ID - 要切換到的分頁代碼，對應 tabPanel-<str分頁ID>
+ *              與 tabBtn-<str分頁ID> 兩個元素 id
+ *              （例如 "pwd"、"autocreate"、"sheets"、"archive"）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 切換分頁籤(str分頁ID) {
+  const arr全部分頁按鈕 = document.querySelectorAll("#tabBar button");
+  const arr全部分頁內容 = document.querySelectorAll("#mainContent > .tab-panel");
+
+  arr全部分頁按鈕.forEach(function (btn) { btn.classList.remove("active"); });
+  arr全部分頁內容.forEach(function (elPanel) { elPanel.classList.remove("active"); });
+
+  const btn目標按鈕 = document.getElementById("tabBtn-" + str分頁ID);
+  const el目標內容 = document.getElementById("tabPanel-" + str分頁ID);
+  if (btn目標按鈕) { btn目標按鈕.classList.add("active"); }
+  if (el目標內容) { el目標內容.classList.add("active"); }
+}
 
 /**
  * ------------------------------------------------------------

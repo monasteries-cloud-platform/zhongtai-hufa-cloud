@@ -8,8 +8,22 @@
   /*
    * ============================================================
    * 檔案：系統管理後台頁面（總管理員專用）
-   * 版本：v1.4（2026-09-24）
+   * 版本：v1.6（2026-09-24）
    * 版本歷程：
+   *   - v1.6（2026-09-24，法師確認「卡片式改成索引式」）：
+   *     操作介面由「4 張卡片全部堆疊在同一頁、往下捲動」改為「畫面
+   *     上方橫向分頁籤（Tab）」，4 個分頁對應原本的 4 張卡片：新增
+   *     精舍／精舍清單／修改精舍設定／異動記錄查詢，一次只顯示一個
+   *     分頁的內容。純畫面配置調整，各分頁內部的欄位、按鈕、載入與
+   *     送出邏輯完全未變動，也未新增或移除任何功能。
+   *   - v1.5（2026-09-24，法師確認「真正合併成一張卡片」）：
+   *     移除獨立的「刪除精舍」卡片，刪除功能改為整合進「精舍清單」
+   *     表格：點擊某一列的「刪除」按鈕，會直接在該列下方就地展開
+   *     一個確認區塊（顯示該精舍資料摘要＋輸入精舍代碼二次確認），
+   *     再次點擊同一列「刪除」或按「取消」則收合；點擊別列「刪除」
+   *     會先收合原本展開的列。此為單純介面整合，刪除的後端邏輯與
+   *     二次確認機制本身未變動（硬刪除設定資料、不影響實際試算表
+   *     檔案）。
    *   - v1.4（2026-09-24，法師實機測試回饋）：
    *     (1) 全部按鈕文字移除「①②」數字編號前綴，只保留純文字
    *     （例如「① 登入」→「登入」、「② 確認刪除（無法復原）」→
@@ -50,16 +64,17 @@
    *   網址的總管理員使用，登入方式為獨立的「管理者密碼」（system
    *   管理_02_驗證與Session.gs 的 管理者登入 API）。
    *
-   *   提供 5 項功能：
+   *   提供 4 項功能：
    *   1. 新增精舍（精舍代碼＋Email選填）
-   *   2. 精舍清單（檢視所有精舍設定，含密碼救援用途）
+   *   2. 精舍清單（檢視所有精舍設定，含密碼救援用途；點擊某列
+   *      「刪除」可就地展開刪除確認區並二次確認，硬刪除該精舍的
+   *      設定資料，不影響實際 Google 試算表檔案）
    *   3. 修改精舍設定（救援用：可修改任一精舍的顯示名稱／密碼／
    *      Email／3 種長期固定試算表相關欄位：資料庫試算表ID、
    *      學員基本資料試算表ID、精舍資料夾ID；提報名單／出席回報／
    *      報到名單／封存備查等 4 個當年度一次性試算表 ID 由系統
    *      自動管理，不在此頁手動修改）
-   *   4. 刪除精舍（硬刪除設定資料，需二次確認，不影響實際試算表檔案）
-   *   5. 異動記錄查詢（可篩選特定精舍或查全部）
+   *   4. 異動記錄查詢（可篩選特定精舍或查全部）
    *
    *   進入本頁前會先檢查 sessionStorage 是否有管理者登入資訊，
    *   沒有就顯示登入表單（不像精舍登入會導向另一個頁面，因為
@@ -99,6 +114,34 @@
     font-size: 13px;
   }
   #btnLogout:hover { background: #555; }
+
+  /* 上方橫向分頁籤（2026-09-24 新增：卡片式改為索引式介面） */
+  .tabbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 18px;
+    border-bottom: 2px solid #d8dee8;
+  }
+  .tabbar button {
+    padding: 9px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #667;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    margin-bottom: -2px;
+  }
+  .tabbar button:hover { color: #2E5395; }
+  .tabbar button.active {
+    color: #1F3864;
+    font-weight: bold;
+    border-bottom-color: #2E5395;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
 
   .card {
     background: #fff;
@@ -242,7 +285,16 @@
     <button id="btnLogout" onclick="處理登出按鈕點擊()">登出</button>
   </div>
 
-  <!-- 卡片一：新增精舍 -->
+  <!-- 上方橫向分頁籤：4 個分頁對應原本的 4 張卡片 -->
+  <div class="tabbar" id="tabBar">
+    <button class="active" id="tabBtn-add" onclick="切換分頁籤('add')">新增精舍</button>
+    <button id="tabBtn-list" onclick="切換分頁籤('list')">精舍清單</button>
+    <button id="tabBtn-edit" onclick="切換分頁籤('edit')">修改精舍設定</button>
+    <button id="tabBtn-log" onclick="切換分頁籤('log')">異動記錄查詢</button>
+  </div>
+
+  <!-- 分頁一：新增精舍 -->
+  <div class="tab-panel active" id="tabPanel-add">
   <div class="card">
     <h2>新增精舍</h2>
     <div class="desc">
@@ -259,12 +311,18 @@
     <button class="action" id="btnAddTemple" onclick="處理新增精舍按鈕點擊()">新增精舍</button>
     <div class="msg" id="msgAddTemple"></div>
   </div>
+  </div>
+  <!-- 分頁一結束 -->
 
-  <!-- 卡片二：精舍清單 -->
+  <!-- 分頁二：精舍清單 -->
+  <div class="tab-panel" id="tabPanel-list">
   <div class="card">
     <h2>精舍清單</h2>
     <div class="desc">
       顯示目前所有精舍的設定狀態。密碼欄位預設隱藏，點擊「顯示」才會顯示明碼，救援時使用，請留意畫面共用時的隱私。
+      點擊「刪除」會直接在該列下方展開刪除確認區（顯示資料摘要＋輸入精舍代碼二次確認），確認無誤才會真正
+      刪除；刪除僅移除該精舍的登入帳號、密碼、試算表 ID 等設定資料，不會刪除該精舍名下實際的 Google 試算表
+      檔案（試算表本身仍完整保留在雲端硬碟中），此操作為硬刪除，執行後無法從本頁復原。
     </div>
 
     <button class="action" id="btnRefreshList" onclick="載入精舍清單()">重新整理清單</button>
@@ -286,8 +344,11 @@
       <tbody id="tbodyTempleList"></tbody>
     </table>
   </div>
+  </div>
+  <!-- 分頁二結束 -->
 
-  <!-- 卡片三：修改精舍設定 -->
+  <!-- 分頁三：修改精舍設定 -->
+  <div class="tab-panel" id="tabPanel-edit">
   <div class="card">
     <h2>修改精舍設定（救援用）</h2>
     <div class="desc">
@@ -329,36 +390,11 @@
     </div>
     <div class="msg" id="msgEditTemple"></div>
   </div>
-
-  <!-- 卡片四：刪除精舍 -->
-  <div class="card">
-    <h2>刪除精舍</h2>
-    <div class="desc">
-      刪除僅移除該精舍的「登入帳號、密碼、試算表 ID 等設定資料」，不會刪除該精舍名下實際的 Google
-      試算表檔案（試算表本身仍完整保留在雲端硬碟中）。此操作為硬刪除，執行後無法從本頁復原，
-      請務必先載入資料摘要確認無誤，並輸入精舍代碼進行二次確認後才會執行。
-    </div>
-
-    <label for="selectDeleteTemple">選擇精舍代碼</label>
-    <select id="selectDeleteTemple" onchange="處理刪除精舍下拉選單變更()">
-      <option value="">請先重新整理精舍清單...</option>
-    </select>
-
-    <button class="action" id="btnLoadDeleteSummary" onclick="處理載入刪除摘要按鈕點擊()">載入精舍資料摘要</button>
-
-    <div class="delete-summary-box" id="deleteTempleSummaryBox">
-      <div id="deleteTempleSummaryText"></div>
-
-      <label for="inputDeleteConfirmCode">請輸入精舍代碼「<strong id="deleteConfirmCodeHint"></strong>」以確認刪除</label>
-      <input type="text" id="inputDeleteConfirmCode" autocomplete="off" placeholder="請完整輸入精舍代碼">
-
-      <button class="action danger" id="btnConfirmDelete" onclick="處理確認刪除按鈕點擊()">確認刪除（無法復原）</button>
-    </div>
-
-    <div class="msg" id="msgDeleteTemple"></div>
   </div>
+  <!-- 分頁三結束 -->
 
-  <!-- 卡片五：異動記錄查詢 -->
+  <!-- 分頁四：異動記錄查詢 -->
+  <div class="tab-panel" id="tabPanel-log">
   <div class="card">
     <h2>異動記錄查詢</h2>
     <div class="desc">最多保留最近 100 筆異動記錄，可篩選特定精舍，或選「全部精舍」查看所有記錄。</div>
@@ -383,6 +419,8 @@
       <tbody id="tbodyChangeLog"></tbody>
     </table>
   </div>
+  </div>
+  <!-- 分頁四結束 -->
 
 </div>
 
@@ -402,6 +440,37 @@ const ARR_試算表欄位名稱 = [
 // 目前「精舍清單」查詢結果暫存在記憶體中，供「修改精舍設定」卡片
 // 選擇精舍後直接取用，不用每次都重新呼叫後端 API
 let obj目前精舍清單快取 = {};
+
+// 目前在「精舍清單」表格中就地展開刪除確認列的精舍代碼；
+// 空字串代表目前沒有任何一列處於展開狀態（2026-09-24 卡片合併新增）
+let str目前刪除確認精舍代碼 = "";
+
+/**
+ * ------------------------------------------------------------
+ * 函式：切換分頁籤
+ * 版本：v1.0（2026-09-24）
+ * 用途：畫面從「卡片全部堆疊在同一頁」改為「上方橫向分頁籤」後，
+ *       負責切換目前顯示哪一個分頁內容區塊，並同步分頁籤按鈕的
+ *       選取樣式（.active）。純畫面切換，不牽動任何資料載入或
+ *       後端 API 呼叫——各分頁原本的按鈕、載入邏輯完全不變。
+ * 參數：
+ *   str分頁ID - 要切換到的分頁代碼，對應 tabPanel-<str分頁ID>
+ *              與 tabBtn-<str分頁ID> 兩個元素 id（例如 "add"、"list"）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 切換分頁籤(str分頁ID) {
+  const arr全部分頁按鈕 = document.querySelectorAll("#tabBar button");
+  const arr全部分頁內容 = document.querySelectorAll("#mainContent > .tab-panel");
+
+  arr全部分頁按鈕.forEach(function (btn) { btn.classList.remove("active"); });
+  arr全部分頁內容.forEach(function (elPanel) { elPanel.classList.remove("active"); });
+
+  const btn目標按鈕 = document.getElementById("tabBtn-" + str分頁ID);
+  const el目標內容 = document.getElementById("tabPanel-" + str分頁ID);
+  if (btn目標按鈕) { btn目標按鈕.classList.add("active"); }
+  if (el目標內容) { el目標內容.classList.add("active"); }
+}
 
 /**
  * ------------------------------------------------------------
@@ -680,17 +749,10 @@ async function 載入精舍清單() {
       elSelectEdit.appendChild(elOption);
     });
 
-    // 同步更新「刪除精舍」下拉選單
-    const elSelectDelete = document.getElementById("selectDeleteTemple");
-    elSelectDelete.innerHTML = "<option value=\"\">請選擇精舍代碼...</option>";
-    arr精舍代碼清單.forEach(function (str精舍代碼) {
-      const elOption = document.createElement("option");
-      elOption.value = str精舍代碼;
-      elOption.textContent = str精舍代碼 + "（" + obj目前精舍清單快取[str精舍代碼].顯示名稱 + "）";
-      elSelectDelete.appendChild(elOption);
-    });
-    // 清單重新整理後，先前載入的刪除摘要已可能過期，一律隱藏，避免確認到舊資料
-    document.getElementById("deleteTempleSummaryBox").style.display = "none";
+    // 清單重新整理後，先前就地展開的刪除確認列已可能過期，一律移除，避免確認到舊資料
+    str目前刪除確認精舍代碼 = "";
+    const elOldDeleteRow = document.getElementById("rowDeleteConfirm");
+    if (elOldDeleteRow) { elOldDeleteRow.remove(); }
 
     // 同步更新「異動記錄查詢」篩選下拉選單（保留「全部精舍」選項在最前面）
     const elSelectLog = document.getElementById("selectLogTempleFilter");
@@ -860,77 +922,71 @@ async function 處理儲存精舍修改按鈕點擊() {
 /**
  * ------------------------------------------------------------
  * 函式：處理清單刪除按鈕點擊
- * 版本：v1.0（2026-09-19）
- * 用途：精舍清單表格中每一列的「刪除」按鈕，點擊後自動捲動到
- *       「刪除精舍」卡片、選取對應精舍，並直接載入其資料摘要，
- *       省去使用者自己再去下拉選單找一次的步驟。
+ * 版本：v2.0（2026-09-24，法師訪談決議：合併「精舍清單」與「刪除
+ *       精舍」為一張卡片）
+ * 版本歷程：
+ *   - v2.0（2026-09-24）：原本點擊後會捲動到獨立的「刪除精舍」
+ *     卡片，改為直接在該列下方就地展開一列確認區（顯示資料摘要＋
+ *     二次確認輸入欄），不再需要跳到另一張卡片、也不用再選一次
+ *     精舍代碼。同一時間只會有一列展開中，點擊別列的「刪除」或
+ *     重新整理清單都會先收合先前展開的那一列。再次點擊同一列的
+ *     「刪除」則是收合（切換顯示/隱藏）。
+ *   - v1.0（2026-09-19）：初版，捲動到獨立的「刪除精舍」卡片。
+ * 用途：精舍清單表格中每一列的「刪除」按鈕，點擊後在該列下方
+ *       就地展開／收合刪除確認區塊。
  * 參數：
  *   str精舍代碼 - 要刪除的精舍代碼
  * 回傳：無
  * ------------------------------------------------------------
  */
 function 處理清單刪除按鈕點擊(str精舍代碼) {
-  document.getElementById("selectDeleteTemple").value = str精舍代碼;
-  document.getElementById("selectDeleteTemple").scrollIntoView({ behavior: "smooth", block: "center" });
-  處理載入刪除摘要按鈕點擊();
-}
+  const elOldRow = document.getElementById("rowDeleteConfirm");
+  const bool原本就是這列展開中 = str目前刪除確認精舍代碼 === str精舍代碼 && elOldRow;
 
-/**
- * ------------------------------------------------------------
- * 函式：處理刪除精舍下拉選單變更
- * 版本：v1.0（2026-09-19）
- * 用途：使用者手動切換「刪除精舍」下拉選單所選的精舍代碼時，
- *       先前載入的資料摘要與確認欄位已經對不上新選的精舍，
- *       必須立刻隱藏摘要區塊並清空確認欄位，避免使用者誤以為
- *       畫面上顯示的還是舊精舍的資料，看錯對象就按下刪除。
- * 參數：無（直接從下拉選單讀取）
- * 回傳：無
- * ------------------------------------------------------------
- */
-function 處理刪除精舍下拉選單變更() {
-  document.getElementById("deleteTempleSummaryBox").style.display = "none";
-  document.getElementById("inputDeleteConfirmCode").value = "";
-  顯示區塊訊息("msgDeleteTemple", "", "info");
-}
+  if (elOldRow) { elOldRow.remove(); }
 
-/**
- * ------------------------------------------------------------
- * 函式：處理載入刪除摘要按鈕點擊
- * 版本：v1.0（2026-09-19）
- * 用途：讀取下拉選單選擇的精舍代碼，從「載入精舍清單」時已快取
- *       的資料中取出摘要（顯示名稱／Email／試算表設定狀況／
- *       建立與最後修改時間），顯示給總管理員確認「是不是要刪的
- *       那一個精舍」，並帶出下方的二次確認輸入欄位。這一步只是
- *       顯示資料，還不會真的呼叫刪除 API。
- * 參數：無（直接從下拉選單讀取）
- * 回傳：無
- * ------------------------------------------------------------
- */
-function 處理載入刪除摘要按鈕點擊() {
-  const str精舍代碼 = document.getElementById("selectDeleteTemple").value;
-
-  if (!str精舍代碼) {
-    顯示區塊訊息("msgDeleteTemple", "請先選擇要刪除的精舍代碼。", "error");
+  // 再次點擊同一列 → 視為收合，不重新展開
+  if (bool原本就是這列展開中) {
+    str目前刪除確認精舍代碼 = "";
     return;
   }
 
   const obj精舍資料 = obj目前精舍清單快取[str精舍代碼];
   if (!obj精舍資料) {
-    顯示區塊訊息("msgDeleteTemple", "找不到這個精舍的資料，請先按「重新整理清單」後再試一次。", "error");
+    顯示區塊訊息("msgTempleList", "找不到這個精舍的資料，請先按「重新整理清單」後再試一次。", "error");
     return;
   }
 
-  document.getElementById("deleteTempleSummaryText").innerHTML =
-    "精舍代碼：" + 轉義HTML(str精舍代碼) + "<br>" +
-    "顯示名稱：" + 轉義HTML(obj精舍資料.顯示名稱) + "<br>" +
-    "Email：" + 轉義HTML(obj精舍資料.精舍Email || "（未登記）") + "<br>" +
-    "試算表設定：" + 組合試算表設定摘要(obj精舍資料) + "<br>" +
-    "建立時間：" + 轉義HTML(obj精舍資料.建立時間) + "<br>" +
-    "最後修改時間：" + 轉義HTML(obj精舍資料.最後修改時間);
+  str目前刪除確認精舍代碼 = str精舍代碼;
 
-  document.getElementById("deleteConfirmCodeHint").textContent = str精舍代碼;
-  document.getElementById("inputDeleteConfirmCode").value = "";
-  document.getElementById("deleteTempleSummaryBox").style.display = "block";
+  const str摘要 =
+    "精舍代碼：" + 轉義HTML(str精舍代碼) + "　｜　顯示名稱：" + 轉義HTML(obj精舍資料.顯示名稱) +
+    "　｜　Email：" + 轉義HTML(obj精舍資料.精舍Email || "（未登記）") + "<br>" +
+    "試算表設定：" + 組合試算表設定摘要(obj精舍資料) +
+    "　｜　建立時間：" + 轉義HTML(obj精舍資料.建立時間) +
+    "　｜　最後修改時間：" + 轉義HTML(obj精舍資料.最後修改時間);
+
+  const str確認列HTML =
+    "<tr id=\"rowDeleteConfirm\"><td colspan=\"8\">" +
+      "<div class=\"delete-summary-box\" style=\"display:block; margin-top:0;\">" +
+        "<div>" + str摘要 + "</div>" +
+        "<label for=\"inputDeleteConfirmCode\">請輸入精舍代碼「<strong>" + 轉義HTML(str精舍代碼) + "</strong>」以確認刪除</label>" +
+        "<input type=\"text\" id=\"inputDeleteConfirmCode\" autocomplete=\"off\" placeholder=\"請完整輸入精舍代碼\">" +
+        "<button class=\"action danger\" id=\"btnConfirmDelete\" onclick=\"處理內嵌確認刪除按鈕點擊('" + str精舍代碼.replace(/'/g, "\\'") + "')\">確認刪除（無法復原）</button>" +
+        "<button class=\"action\" style=\"margin-left:8px; background:#888;\" onclick=\"處理清單刪除按鈕點擊('" + str精舍代碼.replace(/'/g, "\\'") + "')\">取消</button>" +
+        "<div class=\"msg\" id=\"msgDeleteTemple\"></div>" +
+      "</div>" +
+    "</td></tr>";
+
+  // 找到該精舍所在的那一列（用第一欄精舍代碼比對），插入到它下方
+  const elTbody = document.getElementById("tbodyTempleList");
+  const arrRows = Array.prototype.slice.call(elTbody.querySelectorAll("tr"));
+  const elTargetRow = arrRows.find(function (tr) {
+    return tr.firstElementChild && tr.firstElementChild.textContent === str精舍代碼;
+  });
+  if (elTargetRow) {
+    elTargetRow.insertAdjacentHTML("afterend", str確認列HTML);
+  }
 
   顯示區塊訊息(
     "msgDeleteTemple",
@@ -941,18 +997,20 @@ function 處理載入刪除摘要按鈕點擊() {
 
 /**
  * ------------------------------------------------------------
- * 函式：處理確認刪除按鈕點擊
- * 版本：v1.0（2026-09-19）
- * 用途：二次確認欄位必須「完全等於」目前選擇的精舍代碼才會真正
+ * 函式：處理內嵌確認刪除按鈕點擊
+ * 版本：v1.0（2026-09-24，取代原本獨立卡片的「處理確認刪除按鈕
+ *       點擊」，行為完全相同，僅呼叫來源從獨立卡片改為就地展開列）
+ * 用途：二次確認欄位必須「完全等於」要刪除的精舍代碼才會真正
  *       呼叫「刪除精舍」API，這是避免總管理員手滑誤刪的最後一道
  *       防線。確認欄位比對採區分大小寫的完全比對，不做模糊比對，
  *       確保使用者是真的看清楚代碼才輸入，而不是複製貼上帶過去。
- * 參數：無（直接從畫面欄位讀取）
+ * 參數：
+ *   str精舍代碼 - 要刪除的精舍代碼（由展開列的按鈕 onclick 帶入，
+ *                  不再依賴下拉選單，避免下拉選單被移除後找不到值）
  * 回傳：無
  * ------------------------------------------------------------
  */
-async function 處理確認刪除按鈕點擊() {
-  const str精舍代碼 = document.getElementById("selectDeleteTemple").value;
+async function 處理內嵌確認刪除按鈕點擊(str精舍代碼) {
   const obj登入資訊 = 取得目前登入管理者資訊();
 
   if (!obj登入資訊) {
@@ -961,12 +1019,8 @@ async function 處理確認刪除按鈕點擊() {
     return;
   }
 
-  if (!str精舍代碼) {
-    顯示區塊訊息("msgDeleteTemple", "請先選擇並載入要刪除的精舍。", "error");
-    return;
-  }
-
-  const str輸入確認代碼 = document.getElementById("inputDeleteConfirmCode").value.trim();
+  const elInputConfirm = document.getElementById("inputDeleteConfirmCode");
+  const str輸入確認代碼 = elInputConfirm ? elInputConfirm.value.trim() : "";
   if (str輸入確認代碼 !== str精舍代碼) {
     顯示區塊訊息("msgDeleteTemple", "輸入的精舍代碼與確認欄位不符，請重新輸入以確認。", "error");
     return;
@@ -985,18 +1039,17 @@ async function 處理確認刪除按鈕點擊() {
     });
 
     if (objResult.成功) {
-      顯示區塊訊息("msgDeleteTemple", objResult.訊息 || "刪除成功。", "success");
-      document.getElementById("deleteTempleSummaryBox").style.display = "none";
-      document.getElementById("selectDeleteTemple").value = "";
+      str目前刪除確認精舍代碼 = "";
+      顯示區塊訊息("msgTempleList", objResult.訊息 || "刪除成功。", "success");
       await 載入精舍清單();
     } else {
       顯示區塊訊息("msgDeleteTemple", objResult.訊息 || "刪除失敗，請確認精舍代碼是否正確。", "error");
+      if (btn確認刪除按鈕) { btn確認刪除按鈕.disabled = false; }
     }
   } catch (錯誤) {
     console.error("刪除精舍過程發生未預期錯誤：", 錯誤);
     顯示區塊訊息("msgDeleteTemple", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
-  } finally {
-    btn確認刪除按鈕.disabled = false;
+    if (btn確認刪除按鈕) { btn確認刪除按鈕.disabled = false; }
   }
 }
 
