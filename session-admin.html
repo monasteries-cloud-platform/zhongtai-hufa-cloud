@@ -10,8 +10,14 @@
   /*
    * ============================================================
    * 檔案：報到系統場次管理頁面
-   * 版本：v1.1（2026-09-20）
+   * 版本：v1.2（2026-09-24）
    * 版本歷程：
+   *   v1.2（2026-09-24，法師確認「卡片式改成索引式」）：操作介面
+   *     由「2 張卡片全部堆疊在同一頁、往下捲動」改為「畫面上方
+   *     橫向分頁籤（Tab）」，2 個分頁對應原本的 2 張卡片：建立新
+   *     場次／場次清單與報到進度。純畫面配置調整，各分頁內部的
+   *     欄位、按鈕、載入與送出邏輯完全未變動，也未新增或移除任何
+   *     功能。
    *   v1.1（2026-09-20，法師建議：所有清單／名單都要能下載）：
    *     場次清單每一列新增「下載名單」按鈕，點擊後呼叫新增的
    *     「查詢場次出席名單」API，把該場次完整出席名單（含報到
@@ -67,6 +73,34 @@
     margin-left: 8px;
   }
   .topbar-buttons a:hover, .topbar-buttons button:hover { background: #555; }
+
+  /* 上方橫向分頁籤（2026-09-24 新增：卡片式改為索引式介面） */
+  .tabbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 18px;
+    border-bottom: 2px solid #d8dee8;
+  }
+  .tabbar button {
+    padding: 9px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #667;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    margin-bottom: -2px;
+  }
+  .tabbar button:hover { color: #2E5395; }
+  .tabbar button.active {
+    color: #1F3864;
+    font-weight: bold;
+    border-bottom-color: #2E5395;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
 
   .card {
     background: #fff;
@@ -208,7 +242,14 @@
     </div>
   </div>
 
-  <!-- 卡片一：建立新場次 -->
+  <!-- 上方橫向分頁籤：2 個分頁對應原本的 2 張卡片，依操作流程排序 -->
+  <div class="tabbar" id="tabBar">
+    <button class="active" id="tabBtn-create" onclick="切換分頁籤('create')">建立新場次</button>
+    <button id="tabBtn-list" onclick="切換分頁籤('list')">場次清單與報到進度</button>
+  </div>
+
+  <!-- 分頁一：建立新場次 -->
+  <div class="tab-panel active" id="tabPanel-create">
   <div class="card">
     <h2>建立新場次</h2>
     <div class="desc">
@@ -233,8 +274,11 @@
     <button class="action" id="btnCreateSession" onclick="處理建立場次按鈕點擊()">建立場次</button>
     <div class="msg" id="msgCreateSession"></div>
   </div>
+  </div>
+  <!-- 分頁一結束 -->
 
-  <!-- 卡片二：場次清單 -->
+  <!-- 分頁二：場次清單 -->
+  <div class="tab-panel" id="tabPanel-list">
   <div class="card">
     <h2>場次清單與報到進度</h2>
     <div class="desc">已報到人數會依「報到」欄位即時計算，建立場次後若有人報到，重新整理本頁即可看到最新進度。</div>
@@ -244,11 +288,40 @@
     </div>
     <div class="msg" id="msgSessionList"></div>
   </div>
+  </div>
+  <!-- 分頁二結束 -->
 
 </div>
 
 <script src="config.js"></script>
 <script>
+
+/**
+ * ------------------------------------------------------------
+ * 函式：切換分頁籤
+ * 版本：v1.0（2026-09-24）
+ * 用途：畫面從「卡片全部堆疊在同一頁」改為「上方橫向分頁籤」後，
+ *       負責切換目前顯示哪一個分頁內容區塊，並同步分頁籤按鈕的
+ *       選取樣式（.active）。純畫面切換，不牽動任何資料載入或
+ *       後端 API 呼叫——各分頁原本的按鈕、載入邏輯完全不變。
+ * 參數：
+ *   str分頁ID - 要切換到的分頁代碼，對應 tabPanel-<str分頁ID>
+ *              與 tabBtn-<str分頁ID> 兩個元素 id（例如 "create"、"list"）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 切換分頁籤(str分頁ID) {
+  const arr全部分頁按鈕 = document.querySelectorAll("#tabBar button");
+  const arr全部分頁內容 = document.querySelectorAll("#mainContent > .tab-panel");
+
+  arr全部分頁按鈕.forEach(function (btn) { btn.classList.remove("active"); });
+  arr全部分頁內容.forEach(function (elPanel) { elPanel.classList.remove("active"); });
+
+  const btn目標按鈕 = document.getElementById("tabBtn-" + str分頁ID);
+  const el目標內容 = document.getElementById("tabPanel-" + str分頁ID);
+  if (btn目標按鈕) { btn目標按鈕.classList.add("active"); }
+  if (el目標內容) { el目標內容.classList.add("active"); }
+}
 
 /**
  * ------------------------------------------------------------

@@ -10,8 +10,15 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v6.3（2026-09-23）
+   * 版本：v6.4（2026-09-24）
    * 版本歷程：
+   *   - v6.4（2026-09-24，法師確認「卡片式改成索引式」）：操作介面
+   *     由「6 張卡片全部堆疊在同一頁、往下捲動」改為「畫面上方橫向
+   *     分頁籤（Tab）」，6 個分頁對應原本的 6 張卡片，順序沿用
+   *     v6.3 已經依操作流程排好的順序（組長名冊管理→產生各組提報
+   *     名單→檢核提報資料→檢核聘書數→產出核定名單→出席回報管理），
+   *     不再調整。純畫面配置調整，各分頁內部的欄位、按鈕、載入與
+   *     送出邏輯完全未變動，也未新增或移除任何功能。
    *   - v6.3（2026-09-23，法師訪談決議：依實際作業流程重新排列卡片
    *     順序）：畫面上卡片一～六純粹是「顯示順序」，跟後端邏輯／
    *     API action 名稱完全無關，因此本次只調整 HTML 卡片區塊的
@@ -270,6 +277,34 @@
   }
   .topbar-buttons a:hover, .topbar-buttons button:hover { background: #555; }
 
+  /* 上方橫向分頁籤（2026-09-24 新增：卡片式改為索引式介面） */
+  .tabbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 18px;
+    border-bottom: 2px solid #d8dee8;
+  }
+  .tabbar button {
+    padding: 9px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #667;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    margin-bottom: -2px;
+  }
+  .tabbar button:hover { color: #2E5395; }
+  .tabbar button.active {
+    color: #1F3864;
+    font-weight: bold;
+    border-bottom-color: #2E5395;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
   .card {
     background: #fff;
     border-radius: 10px;
@@ -401,9 +436,20 @@
     </div>
   </div>
 
-  <!-- 卡片一：組長名冊管理（2026-09-21 新增；2026-09-23 法師訪談決議，依實際作業
+  <!-- 上方橫向分頁籤：6 個分頁對應原本的 6 張卡片，依操作流程排序 -->
+  <div class="tabbar" id="tabBar">
+    <button class="active" id="tabBtn-leaders" onclick="切換分頁籤('leaders')">一、組長名冊管理</button>
+    <button id="tabBtn-import" onclick="切換分頁籤('import')">二、產生各組提報名單</button>
+    <button id="tabBtn-check" onclick="切換分頁籤('check')">三、檢核提報資料</button>
+    <button id="tabBtn-permits" onclick="切換分頁籤('permits')">四、檢核聘書數</button>
+    <button id="tabBtn-approved" onclick="切換分頁籤('approved')">五、產出核定名單</button>
+    <button id="tabBtn-attendance" onclick="切換分頁籤('attendance')">六、出席回報管理</button>
+  </div>
+
+  <!-- 分頁一：組長名冊管理（2026-09-21 新增；2026-09-23 法師訪談決議，依實際作業
        流程重新排序，原「卡片五」移到最前面，因為組長名冊要先建好，組長才能登入
        線上表單開始填寫提報名單，是整個流程最前置的步驟） -->
+  <div class="tab-panel active" id="tabPanel-leaders">
   <div class="card">
     <h2>一、組長名冊管理</h2>
 
@@ -430,8 +476,11 @@
     </div>
     <div class="msg" id="msgLeaderList"></div>
   </div>
+  </div>
+  <!-- 分頁一結束 -->
 
-  <!-- 卡片二：產生各組提報名單（2026-09-23 法師訪談決議重新排序，原「卡片一」） -->
+  <!-- 分頁二：產生各組提報名單（2026-09-23 法師訪談決議重新排序，原「卡片一」） -->
+  <div class="tab-panel" id="tabPanel-import">
   <div class="card">
     <h2>二、產生各組提報名單</h2>
 
@@ -446,8 +495,11 @@
     </div>
     <div class="msg" id="msgImport"></div>
   </div>
+  </div>
+  <!-- 分頁二結束 -->
 
-  <!-- 卡片三：檢核提報資料（2026-09-23 法師訪談決議重新排序，原「卡片二」） -->
+  <!-- 分頁三：檢核提報資料（2026-09-23 法師訪談決議重新排序，原「卡片二」） -->
+  <div class="tab-panel" id="tabPanel-check">
   <div class="card">
     <h2>三、檢核提報資料</h2>
 
@@ -463,8 +515,11 @@
     </div>
     <div class="msg" id="msgMatch"></div>
   </div>
+  </div>
+  <!-- 分頁三結束 -->
 
-  <!-- 卡片四：檢核聘書數（2026-09-23 法師訪談決議重新排序，原「卡片三」） -->
+  <!-- 分頁四：檢核聘書數（2026-09-23 法師訪談決議重新排序，原「卡片三」） -->
+  <div class="tab-panel" id="tabPanel-permits">
   <div class="card">
     <h2>四、檢核聘書數</h2>
 
@@ -480,8 +535,11 @@
     </div>
     <div class="msg" id="msgSummarize"></div>
   </div>
+  </div>
+  <!-- 分頁四結束 -->
 
-  <!-- 卡片五：產出核定名單（2026-09-23 法師訪談決議重新排序，原「卡片四」） -->
+  <!-- 分頁五：產出核定名單（2026-09-23 法師訪談決議重新排序，原「卡片四」） -->
+  <div class="tab-panel" id="tabPanel-approved">
   <div class="card">
     <h2>五、產出核定名單</h2>
 
@@ -503,8 +561,11 @@
     </div>
     <div class="msg" id="msgExportToCheckin"></div>
   </div>
+  </div>
+  <!-- 分頁五結束 -->
 
-  <!-- 卡片六：出席回報管理（2026-09-22 新增，Module5；順序不變，仍在最後） -->
+  <!-- 分頁六：出席回報管理（2026-09-22 新增，Module5；順序不變，仍在最後） -->
+  <div class="tab-panel" id="tabPanel-attendance">
   <div class="card">
     <h2>六、出席回報管理</h2>
 
@@ -520,11 +581,41 @@
     <div id="attendanceSurveyListArea" style="margin-top:10px;"><div class="empty-hint">尚未產生出席調查表。</div></div>
     <div class="msg" id="msgAttendanceSurvey"></div>
   </div>
+  </div>
+  <!-- 分頁六結束 -->
 
 </div>
 
 <script src="config.js"></script>
 <script>
+
+/**
+ * ------------------------------------------------------------
+ * 函式：切換分頁籤
+ * 版本：v1.0（2026-09-24）
+ * 用途：畫面從「卡片全部堆疊在同一頁」改為「上方橫向分頁籤」後，
+ *       負責切換目前顯示哪一個分頁內容區塊，並同步分頁籤按鈕的
+ *       選取樣式（.active）。純畫面切換，不牽動任何資料載入或
+ *       後端 API 呼叫——各分頁原本的按鈕、載入邏輯完全不變。
+ * 參數：
+ *   str分頁ID - 要切換到的分頁代碼，對應 tabPanel-<str分頁ID>
+ *              與 tabBtn-<str分頁ID> 兩個元素 id（例如 "leaders"、
+ *              "import"、"check"、"permits"、"approved"、"attendance"）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 切換分頁籤(str分頁ID) {
+  const arr全部分頁按鈕 = document.querySelectorAll("#tabBar button");
+  const arr全部分頁內容 = document.querySelectorAll("#mainContent > .tab-panel");
+
+  arr全部分頁按鈕.forEach(function (btn) { btn.classList.remove("active"); });
+  arr全部分頁內容.forEach(function (elPanel) { elPanel.classList.remove("active"); });
+
+  const btn目標按鈕 = document.getElementById("tabBtn-" + str分頁ID);
+  const el目標內容 = document.getElementById("tabPanel-" + str分頁ID);
+  if (btn目標按鈕) { btn目標按鈕.classList.add("active"); }
+  if (el目標內容) { el目標內容.classList.add("active"); }
+}
 
 /**
  * ------------------------------------------------------------
