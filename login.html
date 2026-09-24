@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>護法會雲端系統 - 精舍登入</title>
 <style>
+  /*
+   * ============================================================
+   * 檔案：精舍選擇＋登入頁面
+   * 版本：v1.0（2026-09-16）
+   * 說明：
+   *   提報系統、報到系統共用的登入入口。使用者直接輸入自己精舍的
+   *   精舍代碼與密碼，登入成功後導向「精舍後台管理」頁面。
+   *   （日後提報／報到系統的正式頁面，也可以複製這份頁面的登入
+   *   邏輯，登入成功後改導向各自的功能頁面即可。）
+   * ============================================================
+   */
   body {
     font-family: "微軟正黑體", "PMingLiU", sans-serif;
     background: #f4f6f9;
@@ -97,17 +108,41 @@
 <script src="config.js"></script>
 <script>
 
+/**
+ * ------------------------------------------------------------
+ * 函式：顯示訊息
+ * 版本：v1.0（2026-09-16）
+ * 用途：統一在畫面上顯示提示或錯誤訊息，避免每個地方都重寫一次
+ *       操作 DOM 的程式碼。
+ * 參數：
+ *   str訊息內容 - 要顯示的文字
+ *   bool是否為錯誤 - true 顯示紅色錯誤樣式，false 顯示灰色提示樣式
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 function 顯示訊息(str訊息內容, bool是否為錯誤) {
   const elMsg = document.getElementById("msg");
   elMsg.textContent = str訊息內容;
   elMsg.className = bool是否為錯誤 ? "error" : "info";
 }
 
+/**
+ * ------------------------------------------------------------
+ * 函式：處理登入按鈕點擊
+ * 版本：v1.0（2026-09-16）
+ * 用途：讀取畫面上輸入的精舍代碼與密碼，呼叫後端 API 進行登入；
+ *       登入成功後把 token 存到 sessionStorage，並導向精舍後台
+ *       管理頁面。
+ * 參數：無（直接從畫面欄位讀取）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
 async function 處理登入按鈕點擊() {
   const str精舍代碼 = document.getElementById("inputTempleCode").value.trim();
   const str密碼 = document.getElementById("inputPassword").value;
   const btn登入按鈕 = document.getElementById("btnLogin");
 
+  // 基本欄位檢查：避免空白直接送出，浪費一次網路請求
   if (!str精舍代碼) {
     顯示訊息("請輸入精舍代碼。", true);
     return;
@@ -117,6 +152,7 @@ async function 處理登入按鈕點擊() {
     return;
   }
 
+  // 送出期間先鎖住按鈕，避免使用者重複點擊造成重複請求
   btn登入按鈕.disabled = true;
   顯示訊息("登入中，請稍候...", false);
 
@@ -129,10 +165,12 @@ async function 處理登入按鈕點擊() {
     });
 
     if (objResult.成功) {
+      // 登入成功：把登入資訊存起來，導向後台管理頁面
       儲存登入精舍資訊(objResult.token, str精舍代碼, objResult.精舍顯示名稱 || str精舍代碼);
       顯示訊息("登入成功，正在跳轉...", false);
       window.location.href = "temple-admin.html";
     } else {
+      // 登入失敗：常見原因是精舍代碼不存在或密碼錯誤，後端訊息已經是中文說明
       顯示訊息(objResult.訊息 || "登入失敗，請確認精舍代碼與密碼是否正確。", true);
     }
   } catch (錯誤) {
@@ -143,12 +181,15 @@ async function 處理登入按鈕點擊() {
   }
 }
 
+// 讓使用者在密碼欄位按 Enter 鍵也能直接登入，不用一定要用滑鼠點按鈕
 document.getElementById("inputPassword").addEventListener("keyup", function (event) {
   if (event.key === "Enter") {
     處理登入按鈕點擊();
   }
 });
 
+// 如果使用者已經是登入狀態（sessionStorage 裡還有 token），直接導向後台管理頁面，
+// 不用再登入一次，比較符合使用習慣
 (function 檢查是否已登入() {
   const obj已登入資訊 = 取得目前登入精舍資訊();
   if (obj已登入資訊) {

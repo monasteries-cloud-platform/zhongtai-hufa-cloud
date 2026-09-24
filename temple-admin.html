@@ -8,8 +8,22 @@
   /*
    * ============================================================
    * 檔案：精舍後台管理頁面
-   * 版本：v1.2（2026-09-23）
+   * 版本：v2.0（2026-09-24）
    * 版本歷程：
+   *   - v2.0（2026-09-24，法師訪談決議，Module8「歷史封存與下一期
+   *     輸出」＋試算表架構調整）：
+   *     1. 「試算表ID設定」卡片（原卡片三）從 6 欄縮減為 3 欄
+   *        （資料庫、學員基本資料、精舍資料夾ID）——其餘 4 種
+   *        （提報名單／出席回報／報到名單／封存備查）改列「當年度
+   *        一次性」試算表，不再開放手動設定，畫面上完全不顯示這
+   *        4 個欄位；ARR_試算表欄位名稱 陣列同步縮減，需與後端
+   *        系統管理_01_資料存取.gs 的 ARR_試算表欄位清單 保持一致。
+   *     2. 「自動建立試算表」卡片（卡片二）說明文字同步更新為
+   *        「建立 2 份試算表＋1 個精舍專屬資料夾」，不再提「6 份」。
+   *     3. 新增「卡片四：封存並開始下一期」——按鈕（跳出瀏覽器
+   *        confirm 二次確認）串接後端 action "封存並開始下一期"；
+   *        下方新增「歷年封存查詢」下拉選單，串接 action "查詢
+   *        歷年封存清單"，選擇後開新分頁開啟對應的封存試算表。
    *   - v1.2（2026-09-23，法師訪談決議：「名單回報試算表」統一改稱
    *     「提報名單試算表」）：欄位標籤、輸入框 id、ARR_試算表欄位
    *     名稱陣列同步改名，需與後端 系統管理_01_資料存取.gs 的
@@ -22,11 +36,16 @@
    *     「試算表ID設定」卡片保留，作為手動救援/微調用途，改列為
    *     卡片三。
    * 說明：
-   *   精舍登入後的自助管理頁面，提供三項功能：
+   *   精舍登入後的自助管理頁面，提供四項功能：
    *   1. 修改精舍密碼（可選，不修改也能繼續使用預設密碼 1234）
-   *   2. 自動建立試算表（填入擁有者 Email 後一鍵建立 6 份試算表）
-   *   3. 手動設定/調整 6 種試算表 ID（資料庫、提報名單、出席回報、
-   *      報到名單、封存備查、學員基本資料），作為救援或微調用途
+   *   2. 自動建立試算表（填入擁有者 Email 後一鍵建立長期固定的
+   *      2 份試算表＋1 個精舍專屬 Drive 資料夾）
+   *   3. 手動設定/調整長期固定試算表 ID（資料庫、學員基本資料）
+   *      與精舍資料夾ID，作為救援或微調用途（提報名單／出席回報／
+   *      報到名單這 3 種「當年度一次性」試算表由系統自動建立，
+   *      不在這裡顯示）
+   *   4. 封存並開始下一期（Module8）：把本期資料整批封存、重置
+   *      當年度一次性試算表，並可查詢歷年封存紀錄
    *   進入本頁前會先檢查 sessionStorage 是否有登入資訊，沒有就
    *   導回登入頁面。
    * ============================================================
@@ -116,6 +135,18 @@
     cursor: not-allowed;
   }
   button.action:hover:not(:disabled) { background: #1F3864; }
+  button.action.danger { background: #c0392b; }
+  button.action.danger:hover:not(:disabled) { background: #922b21; }
+
+  select {
+    width: 100%;
+    padding: 8px 10px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-top: 6px;
+  }
 
   .msg { margin-top: 12px; font-size: 13px; min-height: 18px; }
   .msg.error { color: #c00; }
@@ -168,11 +199,14 @@
   <div class="card">
     <h2>自動建立試算表</h2>
     <div class="desc">
-      填入貴精舍未來要用來管理試算表的 Google 帳號 Email，按下方按鈕後，系統會自動複製
-      6 份最新範本、建立成貴精舍專屬的正式試算表，並自動把 6 個試算表 ID 填入下方「試算表
-      ID 設定」。建立後會嘗試把這 6 份試算表的擁有權轉移給您填的 Email；若您的帳號跟中台
-      帳號不同網域（例如一般個人 Gmail），該信箱會收到 Google 的「轉移檔案擁有權」通知信，
-      需要您登入該帳號點擊接受才會完成正式轉移，接受前試算表仍可正常使用。
+      填入貴精舍未來要用來管理試算表的 Google 帳號 Email，按下方按鈕後，系統會自動建立
+      貴精舍專屬的 Drive 資料夾（若尚未建立過），並在裡面複製 2 份最新範本（資料庫、學員
+      基本資料），建立成貴精舍專屬的正式試算表，自動把試算表 ID 與資料夾 ID 填入下方
+      「試算表 ID 設定」。提報名單／出席回報／報到名單這 3 種試算表不需要在這裡建立，
+      系統會在貴精舍第一次實際使用對應功能時自動建立。建立後會嘗試把試算表與資料夾的
+      擁有權轉移給您填的 Email；若您的帳號跟中台帳號不同網域（例如一般個人 Gmail），該
+      信箱會收到 Google 的「轉移檔案擁有權」通知信，需要您登入該帳號點擊接受才會完成
+      正式轉移，接受前試算表與資料夾仍可正常使用。
     </div>
 
     <label for="inputOwnerEmail">擁有者 Email</label>
@@ -188,29 +222,45 @@
     <div class="desc">
       一般情況下建議使用上方「自動建立試算表」即可，不需要手動填寫這裡。這裡保留作為手動
       救援或個別微調用途：可直接貼上既有 Google 試算表 ID（試算表網址中 /d/ 與 /edit 之間
-      的一長串英數字）。未填寫的欄位會維持原本設定不變。
+      的一長串英數字）或資料夾 ID（資料夾網址 /folders/ 後面的一長串英數字）。未填寫的欄位
+      會維持原本設定不變。提報名單／出席回報／報到名單這 3 種「當年度一次性」試算表不在
+      這裡設定，由系統自動建立，若真的需要手動介入，請聯絡總管理員到「系統管理」處理。
     </div>
 
     <label for="input資料庫試算表ID">資料庫試算表ID</label>
     <input type="text" id="input資料庫試算表ID" autocomplete="off">
 
-    <label for="input提報名單試算表ID">提報名單試算表ID</label>
-    <input type="text" id="input提報名單試算表ID" autocomplete="off">
-
-    <label for="input出席回報試算表ID">出席回報試算表ID</label>
-    <input type="text" id="input出席回報試算表ID" autocomplete="off">
-
-    <label for="input報到名單試算表ID">報到名單試算表ID</label>
-    <input type="text" id="input報到名單試算表ID" autocomplete="off">
-
-    <label for="input封存備查試算表ID">封存備查試算表ID</label>
-    <input type="text" id="input封存備查試算表ID" autocomplete="off">
-
     <label for="input學員基本資料試算表ID">學員基本資料試算表ID</label>
     <input type="text" id="input學員基本資料試算表ID" autocomplete="off">
 
+    <label for="input精舍資料夾ID">精舍資料夾ID</label>
+    <input type="text" id="input精舍資料夾ID" autocomplete="off">
+
     <button class="action" id="btnSaveSheets" onclick="處理儲存試算表ID按鈕點擊()">儲存試算表 ID 設定</button>
     <div class="msg" id="msgSaveSheets"></div>
+  </div>
+
+  <!-- 卡片四：封存並開始下一期（2026-09-24 新增，Module8） -->
+  <div class="card">
+    <h2>封存並開始下一期</h2>
+    <div class="desc">
+      每年提報作業全部完成後執行本功能：會把本期的提報名單、審核流程資料（候選清單／待
+      複核清單／核定名單）、出席調查表、已輸出到報到系統的報到資料，整批封存成一份獨立的
+      「封存備查」試算表（存放在貴精舍專屬 Drive 資料夾的「封存檔案」子資料夾內，不會
+      刪除任何原始資料），並把本期核定名單複製成下一期提報作業的起始名單。執行完成後，
+      提報名單／出席回報／報到名單這 3 份試算表會全部重置，下次貴精舍實際使用對應功能
+      時，系統會自動建立全新的空白試算表；「本期組別啟用設定」「組長名冊」不受影響，
+      沿用到下一期。<strong>此操作無法復原</strong>，執行前請確認本期作業真的已經全部
+      完成、不會再有異動。
+    </div>
+    <button class="action danger" id="btnArchiveAndStartNext" onclick="處理封存並開始下一期按鈕點擊()">封存並開始下一期</button>
+    <div class="msg" id="msgArchive"></div>
+
+    <div class="desc" style="margin-top:18px;">歷年封存查詢：選擇下方年度／封存時間，會開新分頁直接開啟該次封存的試算表。</div>
+    <select id="selectArchiveHistory" onchange="處理歷年封存清單選擇變更()">
+      <option value="">請選擇要查看的封存紀錄...</option>
+    </select>
+    <div class="msg" id="msgArchiveHistory"></div>
   </div>
 
 </div>
@@ -218,15 +268,16 @@
 <script src="config.js"></script>
 <script>
 
-// 6 種試算表欄位名稱，集中放在這裡，避免畫面各處分散寫死字串造成打錯字風險
-// （欄位名稱需與後端 系統管理_01_資料存取.gs 的 ARR_試算表欄位清單 完全一致）
+// 長期固定試算表＋精舍資料夾 欄位名稱，集中放在這裡，避免畫面各處分散寫死字串
+// 造成打錯字風險（欄位名稱需與後端 系統管理_01_資料存取.gs 的
+// ARR_試算表欄位清單 完全一致）。
+// 2026-09-24 法師訪談決議（Module8 架構調整）：從 6 個欄位縮減為這 3 個，
+// 其餘 3 個（提報名單／出席回報／報到名單，「當年度一次性」試算表）改由
+// 系統自動偵測建立，畫面上不再顯示、不開放手動設定。
 const ARR_試算表欄位名稱 = [
   "資料庫試算表ID",
-  "提報名單試算表ID",
-  "出席回報試算表ID",
-  "報到名單試算表ID",
-  "封存備查試算表ID",
-  "學員基本資料試算表ID"
+  "學員基本資料試算表ID",
+  "精舍資料夾ID"
 ];
 
 /**
@@ -470,6 +521,126 @@ async function 處理自動建立試算表按鈕點擊() {
 
 /**
  * ------------------------------------------------------------
+ * 函式：處理封存並開始下一期按鈕點擊
+ * 版本：v1.0（2026-09-24，法師訪談決議新增，Module8）
+ * 用途：跳出瀏覽器 confirm 二次確認（此操作無法復原），確認後呼叫
+ *       後端 action "封存並開始下一期"（system: "提報"）。成功後
+ *       重新載入試算表設定（精舍資料夾ID 可能是這次才第一次建立）
+ *       與歷年封存清單（多了剛剛這一筆）。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+async function 處理封存並開始下一期按鈕點擊() {
+  const obj登入資訊 = 取得目前登入精舍資訊();
+  if (!obj登入資訊) {
+    顯示區塊訊息("msgArchive", "登入狀態已失效，請重新登入。", "error");
+    setTimeout(() => { window.location.href = "login.html"; }, 1500);
+    return;
+  }
+
+  const bool確認 = window.confirm(
+    "確定要封存本期資料並開始下一期嗎？\n\n" +
+    "執行後，提報名單／出席回報／報到名單這 3 份試算表會全部重置，本期資料會封存到獨立的" +
+    "試算表保存（不會刪除），此操作無法復原。\n\n請確認本期作業真的已經全部完成。"
+  );
+  if (!bool確認) {
+    顯示區塊訊息("msgArchive", "已取消，未執行封存。", "info");
+    return;
+  }
+
+  const btn按鈕 = document.getElementById("btnArchiveAndStartNext");
+  btn按鈕.disabled = true;
+  顯示區塊訊息("msgArchive", "封存處理中，請稍候（資料量較大時可能需要數十秒）...", "info");
+
+  try {
+    const objResult = await 呼叫後端API({
+      system: "提報",
+      action: "封存並開始下一期",
+      token: obj登入資訊.token
+    });
+
+    if (objResult.成功) {
+      顯示區塊訊息("msgArchive", objResult.訊息 || "封存完成。", "success");
+      await 載入目前精舍設定();
+      await 載入歷年封存清單();
+    } else {
+      顯示區塊訊息("msgArchive", objResult.訊息 || "封存失敗，請稍後再試或聯絡總管理員。", "error");
+    }
+  } catch (錯誤) {
+    console.error("封存並開始下一期過程發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgArchive", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  } finally {
+    btn按鈕.disabled = false;
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：載入歷年封存清單
+ * 版本：v1.0（2026-09-24，法師訪談決議新增，Module8）
+ * 用途：呼叫後端 action "查詢歷年封存清單"（system: "提報"），把
+ *       結果組成下拉選單選項（依封存時間新到舊排序，後端已經處理
+ *       好排序，這裡直接依序放入即可）。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+async function 載入歷年封存清單() {
+  const obj登入資訊 = 取得目前登入精舍資訊();
+  if (!obj登入資訊) { return; }
+
+  const elSelect = document.getElementById("selectArchiveHistory");
+
+  try {
+    const objResult = await 呼叫後端API({
+      system: "提報",
+      action: "查詢歷年封存清單",
+      token: obj登入資訊.token
+    });
+
+    // 先清空既有選項（保留第一個「請選擇...」提示選項）
+    while (elSelect.options.length > 1) {
+      elSelect.remove(1);
+    }
+
+    if (objResult.成功 && objResult.歷年封存清單 && objResult.歷年封存清單.length > 0) {
+      objResult.歷年封存清單.forEach(function (obj紀錄) {
+        const opt = document.createElement("option");
+        opt.value = obj紀錄.封存試算表連結 || "";
+        opt.textContent = obj紀錄.年度 + "年　封存於 " + obj紀錄.封存時間 +
+          "（核定 " + obj紀錄.核定名單筆數 + " 筆，操作人：" + obj紀錄.操作人 + "）";
+        elSelect.appendChild(opt);
+      });
+    } else {
+      顯示區塊訊息("msgArchiveHistory", "目前尚無封存紀錄。", "info");
+    }
+  } catch (錯誤) {
+    console.error("載入歷年封存清單時發生錯誤：", 錯誤);
+    顯示區塊訊息("msgArchiveHistory", "查詢歷年封存清單時發生錯誤，請重新整理頁面再試一次。", "error");
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理歷年封存清單選擇變更
+ * 版本：v1.0（2026-09-24，法師訪談決議新增，Module8）
+ * 用途：下拉選單選擇某一筆封存紀錄後，開新分頁直接開啟對應的
+ *       封存試算表；選回「請選擇...」提示選項則不做任何事。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 處理歷年封存清單選擇變更() {
+  const elSelect = document.getElementById("selectArchiveHistory");
+  const str網址 = elSelect.value;
+  if (!str網址) { return; }
+  window.open(str網址, "_blank");
+  elSelect.value = ""; // 開完新分頁後，選單重置回提示選項，方便下次再選
+}
+
+/**
+ * ------------------------------------------------------------
  * 函式：載入目前精舍設定
  * 版本：v1.0（2026-09-16）
  * 用途：呼叫「精舍取得自己的設定」API，把目前已設定的試算表 ID
@@ -528,6 +699,7 @@ async function 初始化頁面() {
   document.getElementById("mainContent").style.display = "block";
 
   await 載入目前精舍設定();
+  await 載入歷年封存清單();
 }
 
 初始化頁面();
