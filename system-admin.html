@@ -8,8 +8,19 @@
   /*
    * ============================================================
    * 檔案：系統管理後台頁面（總管理員專用）
-   * 版本：v1.3（2026-09-24）
+   * 版本：v1.4（2026-09-24）
    * 版本歷程：
+   *   - v1.4（2026-09-24，法師實機測試回饋）：
+   *     (1) 全部按鈕文字移除「①②」數字編號前綴，只保留純文字
+   *     （例如「① 登入」→「登入」、「② 確認刪除（無法復原）」→
+   *     「確認刪除（無法復原）」），比照 temple-admin.html（精舍
+   *     後台管理）的按鈕文字風格，本頁面按鈕本來就只有 1～2 個
+   *     步驟、不需要編號輔助理解。(2) 「危險操作」按鈕（刪除確認）
+   *     的滑鼠懸停顏色，從 #962d22 改為 #922b21，與
+   *     temple-admin.html 完全一致（先前兩份檔案各自寫死了非常
+   *     接近但不同的色碼，肉眼幾乎看不出差異，但既然都是同一組
+   *     視覺風格，統一成同一個色碼，避免日後有人以為是刻意設計
+   *     的差異）。純樣式與文字調整，未變動任何互動邏輯或後端串接。
    *   - v1.0（2026-09-19）：初版，提供新增精舍／精舍清單／修改精舍
    *     設定／異動記錄查詢 4 項功能。
    *   - v1.1（2026-09-19）：新增「刪除精舍」卡片（硬刪除，僅刪除
@@ -139,7 +150,7 @@
   button.action:hover:not(:disabled) { background: #1F3864; }
 
   button.action.danger { background: #c0392b; }
-  button.action.danger:hover:not(:disabled) { background: #962d22; }
+  button.action.danger:hover:not(:disabled) { background: #922b21; }
 
   button.small {
     padding: 4px 10px;
@@ -156,7 +167,7 @@
     background: #c0392b;
     margin-left: 4px;
   }
-  button.small.danger:hover { background: #962d22; }
+  button.small.danger:hover { background: #922b21; }
 
   .delete-summary-box {
     display: none;
@@ -218,7 +229,7 @@
     <div class="desc">本頁僅供總管理員（法師／中台統一管理帳號）使用，請輸入管理者密碼。</div>
     <label for="inputAdminPassword">管理者密碼</label>
     <input type="password" id="inputAdminPassword" autocomplete="off">
-    <button class="action" id="btnAdminLogin" onclick="處理管理者登入按鈕點擊()">① 登入</button>
+    <button class="action" id="btnAdminLogin" onclick="處理管理者登入按鈕點擊()">登入</button>
     <div class="msg" id="msgAdminLogin"></div>
   </div>
 </div>
@@ -245,7 +256,7 @@
     <label for="inputNewTempleEmail">精舍 Email（選填）</label>
     <input type="text" id="inputNewTempleEmail" autocomplete="off" placeholder="例如：temple-a@gmail.com">
 
-    <button class="action" id="btnAddTemple" onclick="處理新增精舍按鈕點擊()">① 新增精舍</button>
+    <button class="action" id="btnAddTemple" onclick="處理新增精舍按鈕點擊()">新增精舍</button>
     <div class="msg" id="msgAddTemple"></div>
   </div>
 
@@ -256,7 +267,7 @@
       顯示目前所有精舍的設定狀態。密碼欄位預設隱藏，點擊「顯示」才會顯示明碼，救援時使用，請留意畫面共用時的隱私。
     </div>
 
-    <button class="action" id="btnRefreshList" onclick="載入精舍清單()">① 重新整理清單</button>
+    <button class="action" id="btnRefreshList" onclick="載入精舍清單()">重新整理清單</button>
     <div class="msg" id="msgTempleList"></div>
 
     <table class="list" id="tableTempleList" style="display:none;">
@@ -293,7 +304,7 @@
       <option value="">請先重新整理精舍清單...</option>
     </select>
 
-    <button class="action" id="btnLoadTempleDetail" onclick="處理載入精舍資料按鈕點擊()">① 載入精舍資料</button>
+    <button class="action" id="btnLoadTempleDetail" onclick="處理載入精舍資料按鈕點擊()">載入精舍資料</button>
 
     <div id="editTempleFields" style="display:none;">
       <label for="inputEditDisplayName">顯示名稱</label>
@@ -314,7 +325,7 @@
       <label for="inputEdit精舍資料夾ID">精舍資料夾ID（Google Drive 資料夾 ID，用於存放該精舍自動建立的試算表與封存檔案）</label>
       <input type="text" id="inputEdit精舍資料夾ID" autocomplete="off">
 
-      <button class="action" id="btnSaveTempleDetail" onclick="處理儲存精舍修改按鈕點擊()">② 儲存修改</button>
+      <button class="action" id="btnSaveTempleDetail" onclick="處理儲存精舍修改按鈕點擊()">儲存修改</button>
     </div>
     <div class="msg" id="msgEditTemple"></div>
   </div>
@@ -333,7 +344,7 @@
       <option value="">請先重新整理精舍清單...</option>
     </select>
 
-    <button class="action" id="btnLoadDeleteSummary" onclick="處理載入刪除摘要按鈕點擊()">① 載入精舍資料摘要</button>
+    <button class="action" id="btnLoadDeleteSummary" onclick="處理載入刪除摘要按鈕點擊()">載入精舍資料摘要</button>
 
     <div class="delete-summary-box" id="deleteTempleSummaryBox">
       <div id="deleteTempleSummaryText"></div>
@@ -341,7 +352,7 @@
       <label for="inputDeleteConfirmCode">請輸入精舍代碼「<strong id="deleteConfirmCodeHint"></strong>」以確認刪除</label>
       <input type="text" id="inputDeleteConfirmCode" autocomplete="off" placeholder="請完整輸入精舍代碼">
 
-      <button class="action danger" id="btnConfirmDelete" onclick="處理確認刪除按鈕點擊()">② 確認刪除（無法復原）</button>
+      <button class="action danger" id="btnConfirmDelete" onclick="處理確認刪除按鈕點擊()">確認刪除（無法復原）</button>
     </div>
 
     <div class="msg" id="msgDeleteTemple"></div>
@@ -357,7 +368,7 @@
       <option value="">全部精舍</option>
     </select>
 
-    <button class="action" id="btnQueryLog" onclick="處理查詢異動記錄按鈕點擊()">① 查詢異動記錄</button>
+    <button class="action" id="btnQueryLog" onclick="處理查詢異動記錄按鈕點擊()">查詢異動記錄</button>
     <div class="msg" id="msgChangeLog"></div>
 
     <table class="list" id="tableChangeLog" style="display:none;">
