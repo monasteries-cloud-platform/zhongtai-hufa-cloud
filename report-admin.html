@@ -10,8 +10,20 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v6.12（2026-09-25）
+   * 版本：v6.13（2026-09-25）
    * 版本歷程：
+   *   - v6.13（2026-09-25，法師訪談決議：「更正流程，輸出至報系統在
+   *     六出席回報管理之後」）：原本五「產出核定名單」卡片的（2）
+   *     「輸出至報到系統」子區塊，獨立成新的「七、輸出至報到系統」
+   *     分頁，排在六「出席回報管理」之後（分頁籤新增 tabBtn-
+   *     checkinExport／tabPanel-checkinExport）；五的說明文字同步
+   *     簡化為只剩「產出核定名單」一件事，並在最後補上一句「接著請到
+   *     六…最後到七…」的流程提示。所有相關的輸入框、按鈕、訊息區塊
+   *     全部原樣搬移，JS 函式（處理場次代碼欄位變更／處理
+   *     輸出核定名單至報到系統按鈕點擊／處理刪除場次按鈕點擊／
+   *     載入報到場次清單）與初始化頁面()裡的呼叫完全未變動——這些
+   *     資料本來就是頁面載入時直接查詢、不分分頁，只是視覺上換了
+   *     位置，不影響任何既有邏輯。
    *   - v6.12（2026-09-25，法師看畫面截圖發現盲點後訪談決議：「只要
    *     有2張以上聘書時，就需指定出席回報組別」）：卡片五（2）「輸出
    *     至報到系統」說明文字補上明確提示——聘書≥2張的學員一定要先
@@ -518,7 +530,9 @@
     </div>
   </div>
 
-  <!-- 上方橫向分頁籤：6 個分頁對應原本的 6 張卡片，依操作流程排序 -->
+  <!-- 上方橫向分頁籤：7 個分頁，依操作流程排序（2026-09-25 法師訪談決議：「輸出至
+       報到系統」依賴六「出席回報管理」先指定好負責組別，原本放在五「產出核定
+       名單」卡片裡順序會誤導資料組，改成獨立的「七」分頁，排在六之後） -->
   <div class="tabbar" id="tabBar">
     <button class="active" id="tabBtn-leaders" onclick="切換分頁籤('leaders')">一、組長名冊管理</button>
     <button id="tabBtn-import" onclick="切換分頁籤('import')">二、產生各組提報名單</button>
@@ -526,6 +540,7 @@
     <button id="tabBtn-permits" onclick="切換分頁籤('permits')">四、檢核聘書數</button>
     <button id="tabBtn-approved" onclick="切換分頁籤('approved')">五、產出核定名單</button>
     <button id="tabBtn-attendance" onclick="切換分頁籤('attendance')">六、出席回報管理</button>
+    <button id="tabBtn-checkinExport" onclick="切換分頁籤('checkinExport')">七、輸出至報到系統</button>
   </div>
 
   <!-- 分頁一：組長名冊管理（2026-09-21 新增；2026-09-23 法師訪談決議，依實際作業
@@ -634,38 +649,31 @@
   </div>
   <!-- 分頁四結束 -->
 
-  <!-- 分頁五：產出核定名單（2026-09-23 法師訪談決議重新排序，原「卡片四」） -->
+  <!-- 分頁五：產出核定名單（2026-09-23 法師訪談決議重新排序，原「卡片四」；
+       2026-09-25 法師訪談決議：原本的（2）輸出至報到系統移到獨立的「七」分頁，
+       排在六「出席回報管理」之後，因為輸出至報到系統依賴六先指定好負責組別，
+       放在五的話順序上會誤導資料組，詳見 report-admin.html v6.12 版本說明） -->
   <div class="tab-panel" id="tabPanel-approved">
   <div class="card">
     <h2>五、產出核定名單</h2>
 
-    <div class="desc">（1）產出核定名單：確認「待複核清單」所有超額項目都已決議完畢後執行，系統會彙整所有有效聘任的職務、扣除決議取消的部分，產出核定名單（同步刷新原始版快照）。若還有未決議項目會提醒，不會產出。產出完不會自動顯示明細，請按「顯示核定名單」查看。</div>
+    <div class="desc">產出核定名單：確認「待複核清單」所有超額項目都已決議完畢後執行，系統會彙整所有有效聘任的職務、扣除決議取消的部分，產出核定名單（同步刷新原始版快照）。若還有未決議項目會提醒，不會產出。產出完不會自動顯示明細，請按「顯示核定名單」查看。產出後接著請到「六、出席回報管理」指定身兼多組學員的負責組別，最後再到「七、輸出至報到系統」把名單送到報到系統。</div>
     <div class="step-row">
       <button class="action" id="btnGenerateApprovedList" onclick="處理套用決議並產出核定名單按鈕點擊()">產出核定名單</button>
       <button class="action secondary" id="btnRefreshApprovedList" onclick="window.open('review-lists.html?type=approved', '_blank')">顯示核定名單</button>
       <button class="action secondary" id="btnDownloadApprovedList" onclick="處理下載核定名單按鈕點擊()">下載核定名單</button>
     </div>
     <div class="msg" id="msgApprovedList"></div>
-
-    <div class="desc" style="margin-top:18px;">（2）輸出至報到系統：把目前的核定名單輸出到報到系統，變成一個可以現場報到的場次。若身兼多組職務的學員在核定名單中重複多筆，只會輸出「負責組別」那一筆（其餘身兼組別會合併寫在「注意事項」欄位）；<strong>聘書總數≥2張的學員，一定要先到「六、出席回報管理」的「出席回報負責組別」工作頁指定好負責組別，這裡才能執行輸出，否則會整批擋下並列出尚未指定的人員名單</strong>。場次代碼欄位可以直接從下拉選單挑選已存在的場次（挑選後即為覆蓋該場次），或輸入尚未出現過的代碼建立新場次；場次代碼若已存在，需二次確認後才會用最新核定名單覆蓋，「場次名稱」「公告文字」設定維持不變；若該場次已經有人報到過，系統會直接拒絕輸出。也可以選擇既有場次後按「刪除場次」直接移除（無論是否已有人報到，僅會再跳出一次瀏覽器確認視窗，此操作無法復原）。</div>
-    <div class="step-row">
-      <input type="text" id="inputExportSessionCode" list="sessionCodeDatalist" autocomplete="off" placeholder="場次代碼（可從下拉選單挑選既有場次，或輸入新代碼）" oninput="處理場次代碼欄位變更()" style="max-width:280px;">
-      <datalist id="sessionCodeDatalist"></datalist>
-      <input type="text" id="inputExportSessionName" placeholder="場次名稱（新建立場次時必填）" style="max-width:220px;">
-      <button class="action secondary" id="btnExportToCheckin" onclick="處理輸出核定名單至報到系統按鈕點擊()">輸出至報到系統</button>
-      <button class="action danger" id="btnDeleteSession" onclick="處理刪除場次按鈕點擊()">刪除場次</button>
-    </div>
-    <div class="msg" id="msgExportToCheckin"></div>
   </div>
   </div>
   <!-- 分頁五結束 -->
 
-  <!-- 分頁六：出席回報管理（2026-09-22 新增，Module5；順序不變，仍在最後） -->
+  <!-- 分頁六：出席回報管理（2026-09-22 新增，Module5） -->
   <div class="tab-panel" id="tabPanel-attendance">
   <div class="card">
     <h2>六、出席回報管理</h2>
 
-    <div class="desc">（1）出席回報負責組別指定：核定名單中「聘書總數 ≥ 2」（身兼多組）的學員，需要指定一組「負責組別」，決定這位學員的出席由哪一組負責上台確認；只有一組聘書的學員不需要指定，系統自動視為該組負責。按下方按鈕後，系統會直接在「資料庫試算表」產生／更新一個「出席回報負責組別」工作頁，請直接到那個工作頁，用「負責組別」欄位的下拉選單逐一選定即可（不需要在這個網頁上操作）。若核定名單後續有異動，重新按一次本按鈕即可更新工作頁，已經選過的負責組別不會被清空。</div>
+    <div class="desc">（1）出席回報負責組別指定：核定名單中「聘書總數 ≥ 2」（身兼多組）的學員，需要指定一組「負責組別」，決定這位學員的出席由哪一組負責上台確認；只有一組聘書的學員不需要指定，系統自動視為該組負責。按下方按鈕後，系統會直接在「資料庫試算表」產生／更新一個「出席回報負責組別」工作頁，請直接到那個工作頁，用「負責組別」欄位的下拉選單逐一選定即可（不需要在這個網頁上操作）。若核定名單後續有異動，重新按一次本按鈕即可更新工作頁，已經選過的負責組別不會被清空。<strong>這裡的指定結果也是「七、輸出至報到系統」的必要前置條件——聘書≥2張的學員沒指定完，輸出至報到系統會被擋下。</strong></div>
     <div class="step-row">
       <button class="action" id="btnGenerateResponsibleGroupSheet" onclick="處理產生負責組別工作表按鈕點擊()">產生／更新負責組別調查表</button>
       <button class="action secondary" id="btnOpenResponsibleGroupSheet" onclick="處理開啟負責組別工作表按鈕點擊()">開啟負責組別調整工作表</button>
@@ -679,6 +687,26 @@
   </div>
   </div>
   <!-- 分頁六結束 -->
+
+  <!-- 分頁七：輸出至報到系統（2026-09-25 新增，原本是五「產出核定名單」卡片
+       的子項目（2），法師訪談決議獨立成分頁並移到六「出席回報管理」之後，
+       因為這裡依賴六先指定好負責組別，見本檔案 v6.12 版本說明） -->
+  <div class="tab-panel" id="tabPanel-checkinExport">
+  <div class="card">
+    <h2>七、輸出至報到系統</h2>
+
+    <div class="desc">把目前的核定名單輸出到報到系統，變成一個可以現場報到的場次。若身兼多組職務的學員在核定名單中重複多筆，只會輸出「負責組別」那一筆（其餘身兼組別會合併寫在「注意事項」欄位）；<strong>聘書總數≥2張的學員，一定要先到「六、出席回報管理」的「出席回報負責組別」工作頁指定好負責組別，這裡才能執行輸出，否則會整批擋下並列出尚未指定的人員名單</strong>。場次代碼欄位可以直接從下拉選單挑選已存在的場次（挑選後即為覆蓋該場次），或輸入尚未出現過的代碼建立新場次；場次代碼若已存在，需二次確認後才會用最新核定名單覆蓋，「場次名稱」「公告文字」設定維持不變；若該場次已經有人報到過，系統會直接拒絕輸出。也可以選擇既有場次後按「刪除場次」直接移除（無論是否已有人報到，僅會再跳出一次瀏覽器確認視窗，此操作無法復原）。</div>
+    <div class="step-row">
+      <input type="text" id="inputExportSessionCode" list="sessionCodeDatalist" autocomplete="off" placeholder="場次代碼（可從下拉選單挑選既有場次，或輸入新代碼）" oninput="處理場次代碼欄位變更()" style="max-width:280px;">
+      <datalist id="sessionCodeDatalist"></datalist>
+      <input type="text" id="inputExportSessionName" placeholder="場次名稱（新建立場次時必填）" style="max-width:220px;">
+      <button class="action secondary" id="btnExportToCheckin" onclick="處理輸出核定名單至報到系統按鈕點擊()">輸出至報到系統</button>
+      <button class="action danger" id="btnDeleteSession" onclick="處理刪除場次按鈕點擊()">刪除場次</button>
+    </div>
+    <div class="msg" id="msgExportToCheckin"></div>
+  </div>
+  </div>
+  <!-- 分頁七結束 -->
 
 </div>
 
