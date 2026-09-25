@@ -9,8 +9,17 @@
   /*
    * ============================================================
    * 檔案：組長線上填寫提報名單網頁表單
-   * 版本：v1.5（2026-09-25）
+   * 版本：v1.6（2026-09-25）
    * 版本歷程：
+   *   - v1.6（2026-09-25，法師實測回報：手機觀看畫面太小，看不到
+   *     字）：名單表格欄位有 9 欄，先前 CSS 讓表格強制縮到 100%
+   *     容器寬度，手機螢幕窄，每一欄跟裡面的文字/輸入框都被壓到
+   *     看不清楚。改成表格外層（#tableArea）可以左右滑動
+   *     （overflow-x: auto），表格本身設一個最小寬度（760px），
+   *     螢幕比表格窄的時候，使用者可以左右滑動看完整表格，不會再
+   *     被硬壓縮；表格上方加一行提示文字「表格欄位較多，手機畫面
+   *     請左右滑動查看完整內容」，讓使用者知道要滑動。桌面/平板等
+   *     寬螢幕不受影響，看起來跟以前一樣。其餘既有函式完全未變動。
    *   - v1.5（2026-09-25，法師訪談決議：「這樣的訊息內容，會讓組長
    *     以為系統有問題，請使用明確的提醒文字」，指的是登入頁上方
    *     的說明文字）：把「請用您登錄在『組長名冊』中的 Google 帳號
@@ -103,7 +112,12 @@
     border-radius: 8px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 16px;
   }
 
-  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  /* 2026-09-25 法師實測回報：手機上畫面太窄，表格被硬擠成 100% 寬度，
+     欄位跟文字都小到看不到。改成外層容器可以左右滑動（overflow-x:
+     auto），表格本身設一個最小寬度（min-width），螢幕比較窄時就讓
+     使用者自然左右滑動看完整表格，而不是把每一欄硬壓縮到看不清楚。 */
+  #tableArea { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
+  table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px; }
   th, td { border: 1px solid #e0e0e0; padding: 6px 8px; text-align: left; }
   th { background: #f0f3f8; color: #333; }
   td input[type=text] {
@@ -172,6 +186,7 @@
         本期提報已截止，目前僅供檢視，如需異動請直接聯絡資料組協助處理。
       </div>
 
+      <div style="font-size:12px; color:#888; margin-top:10px;">（表格欄位較多，手機畫面請左右滑動查看完整內容）</div>
       <div id="tableArea"></div>
 
       <div class="btn-row">
