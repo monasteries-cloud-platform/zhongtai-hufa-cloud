@@ -11,8 +11,15 @@
    * ============================================================
    * 檔案：清單處理頁（共用「候選清單」／「待複核清單」／「核定
    *       名單」三種清單，用網址參數 ?type= 區分）
-   * 版本：v1.0（2026-09-22）
+   * 版本：v1.1（2026-09-25）
    * 版本歷程：
+   *   - v1.1（2026-09-25，法師訪談決議：「候選學員編號不易查知，
+   *     姓名比較容易知道」）：「候選清單」的「候選學員編號」輸入
+   *     框新增依姓名搜尋的下拉建議清單（組出候選清單表格HTML v1.1、
+   *     新增 處理候選學員編號搜尋輸入／處理候選建議項目點擊），
+   *     呼叫後端新的 "依姓名搜尋學員候選" action（提報系統_02_
+   *     核心邏輯.gs／提報系統_03_API入口.gs）。輸入純數字時視為
+   *       直接打學員編號，不觸發搜尋；其餘既有函式與流程完全未變動。
    *   - v1.0（2026-09-22，法師訪談決議：report-admin.html 三個
    *     內嵌表格「候選清單」「待複核清單」「核定名單」改開另一
    *     個網頁處理，訪談確認架構為「共用一個清單處理頁，用網址
@@ -145,6 +152,31 @@
   }
   .cancel-reason-input { width: 140px; }
   .backfill-id-input { width: 110px; }
+  /* 2026-09-25 法師訪談決議：「候選學員編號不易查知，姓名比較容易知道」，
+     新增依姓名搜尋的下拉建議清單，跟著輸入框顯示在下方。 */
+  .backfill-search-wrap { position: relative; display: inline-block; }
+  .backfill-suggest-box {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 20;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    max-height: 220px;
+    overflow-y: auto;
+    min-width: 220px;
+    font-size: 13px;
+  }
+  .backfill-suggest-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .backfill-suggest-item:hover { background: #eef2f9; }
+  .backfill-suggest-empty { padding: 6px 10px; color: #999; }
 
   #loadingNotice {
     text-align: center;
@@ -338,6 +370,17 @@ async function 呼叫提報API(str動作, obj額外參數) {
 
 // ==================== 【候選清單】 ====================
 
+/**
+ * ------------------------------------------------------------
+ * 函式：組出候選清單表格HTML
+ * 版本：v1.1（2026-09-25，法師訪談決議：「候選學員編號不易查知，
+ *       姓名比較容易知道」）：「候選學員編號」輸入框旁加上依姓名
+ *       搜尋的下拉建議清單，資料組打幾個字（例如正確的姓名或法名）
+ *       就能列出候選人選，點選後自動帶入學員編號，不需要自己另外
+ *       查學員名冊。搜尋跟原本的「回填」按鈕互不影響，只是多一種
+ *       填入學員編號的方式。
+ * ------------------------------------------------------------
+ */
 function 組出候選清單表格HTML(arr候選清單) {
   if (!arr候選清單 || arr候選清單.length === 0) {
     return "<div class='empty-hint'>目前沒有需要人工核對的候選項目。</div>";
@@ -349,14 +392,21 @@ function 組出候選清單表格HTML(arr候選清單) {
 
   arr候選清單.forEach(function (obj一筆, int索引) {
     var strInputId = "backfillInput_" + int索引;
+    var strSuggestBoxId = "backfillSuggest_" + int索引;
     strHTML += "<tr>" +
       "<td>" + 轉義HTML(obj一筆.來源分頁) + "</td>" +
       "<td>" + 轉義HTML(obj一筆.來源列號) + "</td>" +
       "<td>" + 轉義HTML(obj一筆.組長填寫姓名) + "</td>" +
       "<td>" + 轉義HTML(obj一筆.候選學員編號) + "（" + 轉義HTML(obj一筆.候選法名) + "／" + 轉義HTML(obj一筆.候選性別) + "）</td>" +
       "<td colspan='2'>" +
-        "<input type='text' class='backfill-id-input' id='" + strInputId + "' placeholder='正確學員編號' value='" +
-        (String(obj一筆.候選學員編號 || "").indexOf("查無同名") === -1 ? 轉義HTML(obj一筆.候選學員編號) : "") + "'>" +
+        "<div class='backfill-search-wrap'>" +
+          "<input type='text' class='backfill-id-input' id='" + strInputId + "' placeholder='正確學員編號或姓名' value='" +
+          (String(obj一筆.候選學員編號 || "").indexOf("查無同名") === -1 ? 轉義HTML(obj一筆.候選學員編號) : "") + "'" +
+          " oninput=\"處理候選學員編號搜尋輸入('" + strInputId + "', '" + strSuggestBoxId + "')\"" +
+          " onfocus=\"處理候選學員編號搜尋輸入('" + strInputId + "', '" + strSuggestBoxId + "')\"" +
+          " onblur=\"setTimeout(function(){ document.getElementById('" + strSuggestBoxId + "').style.display='none'; }, 200)\">" +
+          "<div class='backfill-suggest-box' id='" + strSuggestBoxId + "'></div>" +
+        "</div>" +
       "</td>" +
       "<td><button class='action secondary' onclick=\"處理回填候選學員編號按鈕點擊('" +
         轉義單引號(obj一筆.來源分頁) + "', " + obj一筆.來源列號 + ", '" + strInputId + "')\">回填</button></td>" +
@@ -387,6 +437,75 @@ async function 處理回填候選學員編號按鈕點擊(str來源分頁, int�
     console.error("回填候選學員編號時發生未預期錯誤：", 錯誤);
     顯示區塊訊息("msgBottom", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
   }
+}
+
+// 每個輸入框各自的「防抖動」計時器，避免每打一個字就馬上呼叫後端，
+// 打字打到一半時先取消前一次還沒送出的計時器。以 strInputId 當 key。
+var g_候選搜尋計時器對照表 = {};
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理候選學員編號搜尋輸入
+ * 版本：v1.0（2026-09-25，法師訪談決議：「候選學員編號不易查知，
+ *       姓名比較容易知道」）
+ * 用途：「候選學員編號」輸入框的 oninput／onfocus 事件處理。輸入框
+ *       裡的內容如果看起來像純數字（學員編號通常是數字），視為在
+ *       打編號，不觸發姓名搜尋；否則等使用者停止打字 400 毫秒後，
+ *       呼叫後端「依姓名搜尋學員候選」，把結果列成下拉選單，點選
+ *       某一筆就把該筆學員編號帶入輸入框、關閉下拉選單。
+ * 參數：strInputId - 輸入框的 element id
+ *       strSuggestBoxId - 下拉建議清單容器的 element id
+ * ------------------------------------------------------------
+ */
+function 處理候選學員編號搜尋輸入(strInputId, strSuggestBoxId) {
+  var elInput = document.getElementById(strInputId);
+  var elBox = document.getElementById(strSuggestBoxId);
+  var str關鍵字 = elInput.value.trim();
+
+  if (g_候選搜尋計時器對照表[strInputId]) {
+    clearTimeout(g_候選搜尋計時器對照表[strInputId]);
+  }
+
+  // 純數字（或空白）視為在打學員編號本身，不需要觸發姓名搜尋
+  if (!str關鍵字 || /^[0-9]+$/.test(str關鍵字)) {
+    elBox.style.display = "none";
+    return;
+  }
+
+  g_候選搜尋計時器對照表[strInputId] = setTimeout(async function () {
+    try {
+      const objResult = await 呼叫提報API("依姓名搜尋學員候選", { 搜尋字串: str關鍵字 });
+      if (!objResult || !objResult.成功) {
+        elBox.innerHTML = "<div class='backfill-suggest-empty'>搜尋失敗，請稍後再試。</div>";
+        elBox.style.display = "block";
+        return;
+      }
+      var arr候選名單 = objResult.候選名單 || [];
+      if (arr候選名單.length === 0) {
+        elBox.innerHTML = "<div class='backfill-suggest-empty'>查無符合「" + 轉義HTML(str關鍵字) + "」的學員。</div>";
+        elBox.style.display = "block";
+        return;
+      }
+      elBox.innerHTML = arr候選名單.map(function (obj一筆) {
+        var str顯示文字 = 轉義HTML(obj一筆.學員編號) + "－" + 轉義HTML(obj一筆.姓名) +
+          "（" + 轉義HTML(obj一筆.法名) + "／" + 轉義HTML(obj一筆.性別) + "）";
+        return "<div class='backfill-suggest-item' onmousedown=\"處理候選建議項目點擊('" +
+          strInputId + "', '" + strSuggestBoxId + "', '" + 轉義單引號(obj一筆.學員編號) + "')\">" +
+          str顯示文字 + "</div>";
+      }).join("");
+      elBox.style.display = "block";
+    } catch (錯誤) {
+      console.error("依姓名搜尋學員候選時發生未預期錯誤：", 錯誤);
+      elBox.innerHTML = "<div class='backfill-suggest-empty'>搜尋時發生未預期錯誤。</div>";
+      elBox.style.display = "block";
+    }
+  }, 400);
+}
+
+/** 點選下拉建議清單中的某一筆，把學員編號帶入輸入框、關閉下拉清單 */
+function 處理候選建議項目點擊(strInputId, strSuggestBoxId, str學員編號) {
+  document.getElementById(strInputId).value = str學員編號;
+  document.getElementById(strSuggestBoxId).style.display = "none";
 }
 
 
