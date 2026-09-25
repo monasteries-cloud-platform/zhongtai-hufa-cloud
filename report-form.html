@@ -9,8 +9,26 @@
   /*
    * ============================================================
    * 檔案：組長線上填寫提報名單網頁表單
-   * 版本：v1.2（2026-09-21）
+   * 版本：v1.4（2026-09-25）
    * 版本歷程：
+   *   - v1.4（2026-09-25，法師訪談決議：「原資料除了開放的部份欄位
+   *     可編輯外，其餘不可編輯；不能整筆資料刪除，這兩點一定要做
+   *     到」）：`組出名單表格HTML` 升級到 v1.2，既有列（有列ID）
+   *     的「刪除」按鈕改成不顯示（該格留空），只有沒有列ID的新增
+   *     列才會顯示刪除按鈕，避免組長誤以為可以刪除既有資料。這是
+   *     配合後端 提報系統_04_組長作業.gs v3.2 的畫面調整——後端
+   *     這次做了強制把關，既有列的核心欄位異動與整列刪除，即使
+   *     前端被繞過也不會真的執行，這裡純粹是讓畫面誠實反映系統
+   *     的實際限制。其餘既有函式完全未變動。
+   *   - v1.3（2026-09-25，法師實測回報：開啟表單網址偶爾出現「Google
+   *     登入元件載入失敗」，重新整理頁面又正常）：新增函式
+   *     `等待Google登入元件就緒`，把「檢查 google.accounts 是否
+   *     就緒」改成輪詢重試（每 300 毫秒一次，最多 15 次、約 4.5
+   *     秒），修正 Google Identity Services 的 script 是非同步
+   *     載入、偶爾比初始化程式碼晚就緒，就被誤判成「載入失敗」的
+   *     問題。`初始化Google登入` 改成先做「精舍代碼」「Client ID」
+   *     這兩項不需要等待的檢查後，才呼叫這個新函式。其餘既有函式
+   *     完全未變動。
    *   - v1.2（2026-09-21，法師實測後訪談決議）：「新聘任職事」欄位
    *     從自由輸入文字改成下拉選單，選項＝本組別在主資料庫「職務
    *     清單」裡的所有職稱（對應後端新增的「組長查詢職稱清單」
@@ -237,18 +255,48 @@ function 初始化Google登入() {
     顯示區塊訊息("msgLogin", "系統尚未完成 Google 登入設定，請聯絡工程人員先申請並填入 Google OAuth Client ID。", "error");
     return;
   }
-  if (typeof google === "undefined" || !google.accounts) {
+
+  等待Google登入元件就緒(0);
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：等待Google登入元件就緒
+ * 版本：v1.0（2026-09-25，法師實測回報：開啟表單網址偶爾出現「Google
+ *       登入元件載入失敗」，重新整理頁面又正常）
+ * 用途：`<script src="https://accounts.google.com/gsi/client" async
+ *       defer>` 是非同步載入，跟頁面下方這段初始化程式碼幾乎同時
+ *       執行，網路較慢或 Google 那端回應較久時，這段程式碼有可能
+ *       先跑到、這時候 window.google 還沒被瀏覽器建立好，就會被
+ *       誤判成「載入失敗」，但其實只是還沒載完，過一下下就會有了
+ *       （跟 config.js `呼叫後端API` 之前修正的「Apps Script 喚醒
+ *       延遲」是類似的道理）。修正方式：改成每 300 毫秒檢查一次，
+ *       最多檢查 15 次（合計等待約 4.5 秒），這段時間內只要偵測到
+ *       google.accounts 已經就緒就馬上初始化登入按鈕；真的等到超過
+ *       4.5 秒還沒載好，才顯示「載入失敗」的錯誤訊息給使用者看，
+ *       這種情況比較可能是網路真的有問題或 Google 服務被防火牆擋掉。
+ * 參數：int已嘗試次數 - 目前是第幾次檢查（從 0 開始，供內部遞迴使用）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 等待Google登入元件就緒(int已嘗試次數) {
+  if (typeof google !== "undefined" && google.accounts) {
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID_前端,
+      callback: 處理Google登入回呼
+    });
+    google.accounts.id.renderButton(document.getElementById("googleSignInButton"), {
+      theme: "outline", size: "large", text: "signin_with", locale: "zh-TW"
+    });
+    return;
+  }
+
+  if (int已嘗試次數 >= 15) {
     顯示區塊訊息("msgLogin", "Google 登入元件載入失敗，請確認網路連線後重新整理頁面。", "error");
     return;
   }
 
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID_前端,
-    callback: 處理Google登入回呼
-  });
-  google.accounts.id.renderButton(document.getElementById("googleSignInButton"), {
-    theme: "outline", size: "large", text: "signin_with", locale: "zh-TW"
-  });
+  setTimeout(function () { 等待Google登入元件就緒(int已嘗試次數 + 1); }, 300);
 }
 
 async function 處理Google登入回呼(objGoogleResponse) {
@@ -357,7 +405,9 @@ function 組出職稱下拉選單HTML(strId, str目前值, str唯讀屬性) {
 /**
  * ------------------------------------------------------------
  * 函式：組出名單表格HTML
- * 版本：v1.1（2026-09-21）
+ * 版本：v1.2（2026-09-25，法師訪談決議：「原資料除了開放的部份欄位
+ *       可編輯外，其餘不可編輯；不能整筆資料刪除，這兩點一定要做
+ *       到」）
  * 用途：2026-09-21 法師實測後訪談決議：「提報名單中原有的資料」
  *       （匯入時就存在、有列ID的既有列）跟「這次線上新增的資料」
  *       （組長按「＋新增一列」新增、還沒有列ID），欄位可否修改的
@@ -369,6 +419,14 @@ function 組出職稱下拉選單HTML(strId, str目前值, str唯讀屬性) {
  *         開啟，全部欄位才會鎖定）。
  *       - 全新新增的列（沒有列ID）不受此限，八個欄位都可以編輯
  *        （一樣除非「截止提報」已經開啟）。
+ *       2026-09-25 追加決議：既有列不能被整筆刪除，「刪除」按鈕
+ *       改成只在「沒有列ID的新增列」才會顯示；既有列那一格改成
+ *       空白（維持表格欄位數一致），這樣畫面上就看不到、也點不到
+ *       刪除既有資料的按鈕。（伺服器端 提報_儲存組長送出名單 v1.1
+ *       同步做了強制把關，就算前端這裡被繞過，既有列的核心欄位跟
+ *       整列刪除都不會真的被寫入／執行，這裡的畫面調整純粹是讓
+ *       操作介面誠實反映系統實際的限制，避免組長誤以為可以刪除
+ *       卻沒有效果、白忙一場。）
  * ------------------------------------------------------------
  */
 function 組出名單表格HTML(bool是否唯讀) {
@@ -382,6 +440,13 @@ function 組出名單表格HTML(bool是否唯讀) {
     var bool是既有列 = obj一筆.列ID !== undefined && obj一筆.列ID !== null && obj一筆.列ID !== "";
     var str核心欄位唯讀屬性 = (bool是否唯讀 || bool是既有列) ? " disabled" : ""; // 學員編號／姓名／法名／性別／原任職稱
     var str可改欄位唯讀屬性 = bool是否唯讀 ? " disabled" : ""; // 續聘／新聘任職事／備註
+    // 既有列不能整筆刪除，只有新增列（沒有列ID）才顯示「刪除」按鈕
+    var str刪除欄HTML = "";
+    if (!bool是否唯讀) {
+      str刪除欄HTML = bool是既有列
+        ? "<td></td>"
+        : "<td><button class='danger' onclick='處理刪除一列點擊(" + int索引 + ")'>刪除</button></td>";
+    }
     strHTML += "<tr data-row-index='" + int索引 + "'>" +
       "<td><input type='text' id='rowField_" + int索引 + "_學員編號' value='" + 轉義HTML(obj一筆.學員編號) + "'" + str核心欄位唯讀屬性 + "></td>" +
       "<td><input type='text' id='rowField_" + int索引 + "_姓名' value='" + 轉義HTML(obj一筆.姓名) + "'" + str核心欄位唯讀屬性 + "></td>" +
@@ -391,7 +456,7 @@ function 組出名單表格HTML(bool是否唯讀) {
       "<td style='text-align:center;'><input type='checkbox' id='rowField_" + int索引 + "_續聘'" + (obj一筆["續聘（打勾）"] ? " checked" : "") + str可改欄位唯讀屬性 + "></td>" +
       "<td>" + 組出職稱下拉選單HTML("rowField_" + int索引 + "_新聘任職事", obj一筆.新聘任職事, str可改欄位唯讀屬性) + "</td>" +
       "<td><input type='text' id='rowField_" + int索引 + "_備註' value='" + 轉義HTML(obj一筆.備註) + "'" + str可改欄位唯讀屬性 + "></td>" +
-      (bool是否唯讀 ? "" : "<td><button class='danger' onclick='處理刪除一列點擊(" + int索引 + ")'>刪除</button></td>") +
+      str刪除欄HTML +
       "</tr>";
   });
 
