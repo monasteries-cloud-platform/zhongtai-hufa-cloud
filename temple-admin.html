@@ -8,8 +8,18 @@
   /*
    * ============================================================
    * 檔案：精舍後台管理頁面
-   * 版本：v2.3（2026-09-24）
+   * 版本：v2.4（2026-09-26）
    * 版本歷程：
+   *   - v2.4（2026-09-26，法師訪談決議：登入後主畫面可由精舍自行設定）：
+   *     「修改精舍密碼」分頁新增一張卡片「登入後預設頁面」，用下拉選單
+   *     讓精舍自行選擇登入成功後要直接進「提報名單資料組操作」還是
+   *     「精舍後台管理」，串接新的後端 action "精舍設定登入後預設頁面"；
+   *     頁面載入時（載入目前精舍設定()）一併把目前設定值帶入下拉選單；
+   *     儲存成功後，若使用者之後在同一個瀏覽器分頁登出重新登入，
+   *     login.html 就會依這裡選的值導向對應頁面（不影響目前這次登入
+   *     狀態，跟修改密碼一樣不需要強制重新登入）。放在「修改精舍密碼」
+   *     分頁而不另開新分頁籤，是因為這兩者都屬於「登入相關的個人化
+   *     設定」，操作頻率同樣很低，合併在一起減少分頁籤數量。
    *   - v2.3（2026-09-24，法師訪談決議：新增精舍時直接自動建立試算表，
    *     欄位合併）：配合 系統管理_01_資料存取.gs／系統管理_06_精舍
    *     建立試算表.gs 的調整——總管理員「新增精舍」時就會直接自動
@@ -66,7 +76,11 @@
    * 說明：
    *   精舍登入後的自助管理頁面，畫面採上方橫向分頁籤，依操作流程
    *   排序，提供三項功能：
-   *   1. 修改精舍密碼（可選，不修改也能繼續使用預設密碼 1234）
+   *   1. 修改精舍密碼分頁：
+   *      (a) 登入後預設頁面（2026-09-26新增）：選擇登入成功後要直接
+   *          進「提報名單資料組操作」還是「精舍後台管理」，全體用這組
+   *          精舍帳密登入的人套用同一個設定
+   *      (b) 修改精舍密碼（可選，不修改也能繼續使用預設密碼 1234）
    *   2. 試算表設定：上半部為自動建立試算表（填入精舍 Email 後
    *      一鍵建立長期固定的 2 份試算表＋1 個精舍專屬 Drive 資料夾，
    *      2026-09-24 起「新增精舍」當下就會自動做這件事，這裡保留
@@ -242,8 +256,28 @@
     <button id="tabBtn-archive" onclick="切換分頁籤('archive')">封存並開始下一期</button>
   </div>
 
-  <!-- 分頁一：修改密碼 -->
+  <!-- 分頁一：修改密碼（2026-09-26 新增「登入後預設頁面」卡片，放在同一分頁，
+       理由見上方檔頭版本說明） -->
   <div class="tab-panel active" id="tabPanel-pwd">
+  <div class="card">
+    <h2>登入後預設頁面</h2>
+    <div class="desc">
+      選擇貴精舍登入成功後要直接進哪一頁：平時最常用「提報名單資料組操作」
+      建議選這個，減少每次登入都要多點一次連結；新精舍剛開始使用、還在
+      做初期設定（例如確認密碼、試算表設定）時，可以先選「精舍後台管理」。
+      這裡選好之後，全體用這組精舍帳密登入的人都會套用同一個設定。
+    </div>
+
+    <label for="selectLoginDefaultPage">登入後直接進入</label>
+    <select id="selectLoginDefaultPage">
+      <option value="report">提報名單資料組操作</option>
+      <option value="admin">精舍後台管理</option>
+    </select>
+
+    <button class="action" id="btnSaveLoginDefaultPage" onclick="處理儲存登入後預設頁面按鈕點擊()">儲存設定</button>
+    <div class="msg" id="msgLoginDefaultPage"></div>
+  </div>
+
   <div class="card">
     <h2>修改精舍密碼</h2>
     <div class="desc">
@@ -484,6 +518,52 @@ async function 處理修改密碼按鈕點擊() {
     顯示區塊訊息("msgChangePassword", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
   } finally {
     btn修改密碼按鈕.disabled = false;
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理儲存登入後預設頁面按鈕點擊
+ * 版本：v1.0（2026-09-26，法師訪談決議新增：登入後主畫面可由精舍自行設定）
+ * 用途：讀取下拉選單目前選擇的值，呼叫後端「精舍設定登入後預設頁面」
+ *       API 儲存。注意：儲存後不影響「目前這個瀏覽器分頁」的登入
+ *       狀態（跟修改密碼一樣不需要強制重新登入），下次登出重新登入
+ *       時 login.html 才會依這裡的設定值導向對應頁面。
+ * 參數：無（直接從畫面下拉選單讀取）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+async function 處理儲存登入後預設頁面按鈕點擊() {
+  const obj登入資訊 = 取得目前登入精舍資訊();
+  if (!obj登入資訊) {
+    顯示區塊訊息("msgLoginDefaultPage", "登入狀態已失效，請重新登入。", "error");
+    setTimeout(() => { window.location.href = "login.html"; }, 1500);
+    return;
+  }
+
+  const str選擇值 = document.getElementById("selectLoginDefaultPage").value;
+  const btn按鈕 = document.getElementById("btnSaveLoginDefaultPage");
+  btn按鈕.disabled = true;
+  顯示區塊訊息("msgLoginDefaultPage", "儲存中，請稍候...", "info");
+
+  try {
+    const objResult = await 呼叫後端API({
+      system: "temple",
+      action: "精舍設定登入後預設頁面",
+      token: obj登入資訊.token,
+      登入後預設頁面: str選擇值
+    });
+
+    if (objResult.成功) {
+      顯示區塊訊息("msgLoginDefaultPage", "設定已儲存，下次登入即會套用（目前登入狀態不受影響）。", "success");
+    } else {
+      顯示區塊訊息("msgLoginDefaultPage", objResult.訊息 || "儲存失敗，請稍後再試。", "error");
+    }
+  } catch (錯誤) {
+    console.error("儲存登入後預設頁面過程發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgLoginDefaultPage", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  } finally {
+    btn按鈕.disabled = false;
   }
 }
 
@@ -788,6 +868,10 @@ async function 載入目前精舍設定() {
       });
       document.getElementById("inputOwnerEmail").value =
         objResult.設定.精舍Email || objResult.設定.擁有者Email || "";
+      // 2026-09-26 新增：把目前的「登入後預設頁面」設定值帶入下拉選單，
+      // 缺值時（理論上不會發生）以 "report" 作相容預設值防呆
+      document.getElementById("selectLoginDefaultPage").value =
+        objResult.設定.登入後預設頁面 || "report";
     }
     // 若查詢失敗，不特別跳錯誤訊息干擾使用者，欄位維持空白即可，
     // 使用者仍然可以重新填寫並儲存

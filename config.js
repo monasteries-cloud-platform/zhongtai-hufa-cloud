@@ -1,20 +1,22 @@
 /**
  * ============================================================
  * 檔案：共用設定檔
- * 版本：v1.3（2026-09-22）
+ * 版本：v1.3（2026-09-26）
  * 版本歷程：
- *   - v1.3（2026-09-22，修正合併遺漏）：2026-09-21 新增
- *     GOOGLE_CLIENT_ID_前端 那次修改，是從一份較舊的本機備份
- *     編輯後整檔覆蓋回去，結果不小心把 2026-09-19 新增的「總
- *     管理員登入 session 輔助函式」（取得/儲存/清除登入管理者
- *     資訊）覆蓋掉了，導致 system-admin.html 載入時
- *     ReferenceError、登入畫面完全出不來。這個版本把兩邊的異動
- *     合併回同一份檔案：保留 GOOGLE_CLIENT_ID_前端 設定，同時
- *     補回三個管理者登入輔助函式。以後每次修改 config.js 前，
- *     務必先跟目前線上版本比對，避免再次用舊備份整檔覆蓋。
+ *   - v1.3（2026-09-26，法師訪談決議：登入後主畫面可由精舍自行設定）：
+ *     新增 SESSION_KEY_登入後預設頁面；`儲存登入精舍資訊()` 新增第
+ *     4 個參數 str登入後預設頁面 一併存入 sessionStorage；
+ *     `取得目前登入精舍資訊()` 回傳物件新增「登入後預設頁面」欄位；
+ *     新增共用函式 `取得登入後導向網址()`，把 "report" / "admin"
+ *     兩種代碼值轉成實際頁面檔名，login.html／temple-admin.html
+ *     共用這個函式，避免各自寫死頁面檔名。
+ *     （同日補回：改版時誤刪的總管理員登入資訊常數
+ *     SESSION_KEY_管理者TOKEN 與 儲存／取得／清除登入管理者資訊
+ *     三個函式，system-admin.html 仍在使用，內容與舊版完全相同。）
  *   - v1.2（2026-09-21）：GOOGLE_CLIENT_ID_前端 由待填佔位文字改填
  *     正式申請完成的 Google OAuth Client ID（供「組長線上填寫提報
- *     名單網頁表單」report-form.html 的 Google 登入元件使用）。
+ *     名單網頁表單」report-form.html 的 Google 登入元件使用），
+ *     其餘內容未變動。
  *   - v1.1（2026-09-18）：`呼叫後端API()` 新增「連線失敗自動重試
  *     一次」機制，改善 Apps Script Web App 閒置後第一次呼叫偶爾
  *     連線失敗的現象（詳見該函式的變更說明）。
@@ -26,9 +28,8 @@
  *     名稱，避免打錯字。
  * 說明：
  *   護法會雲端系統的前端共用設定，提報系統、報到系統、精舍後台
- *   管理、系統管理後台等所有頁面都引用這份設定檔，未來若 Web App
- *   網址變更（例如重新部署），只需要改這一個檔案，不用每個頁面
- *   都改一次。
+ *   管理等所有頁面都引用這份設定檔，未來若 Web App 網址變更
+ *   （例如重新部署），只需要改這一個檔案，不用每個頁面都改一次。
  * ============================================================
  */
 
@@ -45,6 +46,10 @@ const GOOGLE_CLIENT_ID_前端 = "1097675230838-338d9rf5b55eqkr9pp58o1da7kuehsgf.
 const SESSION_KEY_精舍TOKEN = "護法會雲端系統_精舍token";
 const SESSION_KEY_精舍代碼 = "護法會雲端系統_精舍代碼";
 const SESSION_KEY_精舍顯示名稱 = "護法會雲端系統_精舍顯示名稱";
+// 2026-09-26 新增：登入後預設頁面（"report" / "admin"），登入當下由後端
+// 精舍登入() 回傳並存入這裡，login.html 讀出來決定要導向哪一頁，不用
+// 每次都重新呼叫 API 查詢
+const SESSION_KEY_登入後預設頁面 = "護法會雲端系統_登入後預設頁面";
 
 // 總管理員登入後，token 存在瀏覽器 sessionStorage 時使用的 key 名稱
 const SESSION_KEY_管理者TOKEN = "護法會雲端系統_管理者token";
@@ -119,7 +124,8 @@ async function 呼叫後端API(obj請求內容) {
  *       避免 key 名稱打錯字造成的錯誤難以排查。
  * 參數：無
  * 回傳：
- *   若已登入 → { token: str, 精舍代碼: str, 精舍顯示名稱: str }
+ *   若已登入 → { token: str, 精舍代碼: str, 精舍顯示名稱: str,
+ *                登入後預設頁面: str（"report" 或 "admin"） }
  *   若尚未登入 → null
  * ------------------------------------------------------------
  */
@@ -134,7 +140,9 @@ function 取得目前登入精舍資訊() {
   return {
     token: strToken,
     精舍代碼: str精舍代碼,
-    精舍顯示名稱: sessionStorage.getItem(SESSION_KEY_精舍顯示名稱) || str精舍代碼
+    精舍顯示名稱: sessionStorage.getItem(SESSION_KEY_精舍顯示名稱) || str精舍代碼,
+    // 缺值時（理論上不會發生）以 "report" 作相容預設值，避免頁面判斷出錯
+    登入後預設頁面: sessionStorage.getItem(SESSION_KEY_登入後預設頁面) || "report"
   };
 }
 
@@ -149,16 +157,20 @@ function 取得目前登入精舍資訊() {
  *       Phase 3 架構規劃中「密碼與登入狀態盡量簡單、但不過度
  *       暴露風險」的原則。
  * 參數：
- *   strToken       - 登入成功後拿到的 token
- *   str精舍代碼     - 登入的精舍代碼
- *   str精舍顯示名稱 - 精舍的顯示名稱（用於畫面上顯示，不影響邏輯判斷）
+ *   strToken         - 登入成功後拿到的 token
+ *   str精舍代碼       - 登入的精舍代碼
+ *   str精舍顯示名稱   - 精舍的顯示名稱（用於畫面上顯示，不影響邏輯判斷）
+ *   str登入後預設頁面 - （2026-09-26新增）"report" 或 "admin"，缺省時
+ *                        存 "report"，避免舊呼叫端沒帶這個參數時存入
+ *                        undefined 字串
  * 回傳：無
  * ------------------------------------------------------------
  */
-function 儲存登入精舍資訊(strToken, str精舍代碼, str精舍顯示名稱) {
+function 儲存登入精舍資訊(strToken, str精舍代碼, str精舍顯示名稱, str登入後預設頁面) {
   sessionStorage.setItem(SESSION_KEY_精舍TOKEN, strToken);
   sessionStorage.setItem(SESSION_KEY_精舍代碼, str精舍代碼);
   sessionStorage.setItem(SESSION_KEY_精舍顯示名稱, str精舍顯示名稱 || str精舍代碼);
+  sessionStorage.setItem(SESSION_KEY_登入後預設頁面, str登入後預設頁面 || "report");
 }
 
 
@@ -175,6 +187,25 @@ function 清除登入精舍資訊() {
   sessionStorage.removeItem(SESSION_KEY_精舍TOKEN);
   sessionStorage.removeItem(SESSION_KEY_精舍代碼);
   sessionStorage.removeItem(SESSION_KEY_精舍顯示名稱);
+  sessionStorage.removeItem(SESSION_KEY_登入後預設頁面);
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：取得登入後導向網址
+ * 版本：v1.0（2026-09-26，法師訪談決議新增：登入後主畫面可由精舍自行設定）
+ * 用途：把「登入後預設頁面」欄位的代碼值（"report" / "admin"）轉成
+ *       實際要導向的頁面檔名，login.html（登入成功／已登入自動導向）
+ *       共用這個函式，避免各處各自寫死頁面檔名、日後改檔名要改兩處。
+ * 參數：
+ *   str登入後預設頁面 - "report" 或 "admin"（或缺值／不明字串）
+ * 回傳：
+ *   "report-admin.html"（"admin" 以外一律視為 report，含缺值／
+ *   不明字串的防呆情況）或 "temple-admin.html"（值為 "admin" 時）
+ * ------------------------------------------------------------
+ */
+function 取得登入後導向網址(str登入後預設頁面) {
+  return str登入後預設頁面 === "admin" ? "temple-admin.html" : "report-admin.html";
 }
 
 
