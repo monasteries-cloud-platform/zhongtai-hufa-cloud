@@ -438,6 +438,19 @@
     line-height: 1.6;
     white-space: pre-line;
   }
+  /* 2026-09-27 新增：說明文字改條列式後，縮小項目間距，避免卡片被拉得過高
+     （法師訪談決議：先精簡文字為條列重點，暫不做步驟折疊，按鈕位置與操作
+     邏輯全部不變，純粹縮短文字高度） */
+  .card .desc ul {
+    margin: 0;
+    padding-left: 18px;
+  }
+  .card .desc li {
+    margin: 0 0 4px 0;
+  }
+  .card .desc li:last-child {
+    margin-bottom: 0;
+  }
   .step-row {
     display: flex;
     flex-wrap: wrap;
@@ -568,7 +581,13 @@
   <div class="card">
     <h2>一、組長名冊管理</h2>
 
-    <div class="desc">（1）組長填寫網址與截止提報：組長要用登錄在下方（2）「組長名冊」的 Google 帳號，才能登入「組長線上填寫提報名單」網頁表單，按「複製網址」即可分享給組長。「截止提報」是全體組別共用的總開關，開啟後所有組長的表單一律轉為唯讀，無法再新增／修改／刪除，需要異動請直接聯絡資料組協助處理。</div>
+    <div class="desc">（1）組長填寫網址與截止提報：
+      <ul>
+        <li>組長需先在下方「（2）組長名冊」登錄 Google 帳號，才能登入線上表單填寫提報名單。</li>
+        <li>按「複製網址」分享表單連結給組長。</li>
+        <li>「截止提報」為全體組別共用總開關：開啟後所有組長表單一律唯讀，無法新增／修改／刪除；需異動請聯絡資料組。</li>
+      </ul>
+    </div>
     <div class="toggle-row">
       <input type="checkbox" id="chkCloseSubmission" onchange="處理截止提報開關變更(this)">
       <label for="chkCloseSubmission">截止提報（開啟後，所有組長的線上表單一律唯讀）</label>
@@ -578,7 +597,13 @@
       <button class="action secondary" onclick="處理複製組長表單網址按鈕點擊()">複製網址</button>
     </div>
 
-    <div class="desc" style="margin-top:18px;">（2）組長名冊維護：先選「組別」，若這個組別之前已經登錄過組長，系統會自動帶出姓名與 Email（若同一組別有多位組長，姓名欄位會變成下拉選單，供您切換要修改／刪除哪一位）；確認或修改姓名／Email 後，按「新增」「修改」或「刪除」執行對應動作即可，不需要另外查看清單。這裡的 Email 除了供組長登入上方的線上表單，系統也會同步把「提報_XX組」（以及日後產生的「出席調查_XX組」）分頁的 Google 試算表編輯權開放給這個 Email，讓組長也可以直接打開試算表編輯自己那一組的分頁，看不到也改不到其他組。</div>
+    <div class="desc" style="margin-top:18px;">（2）組長名冊維護：
+      <ul>
+        <li>先選「組別」：若已登錄過組長，系統自動帶出姓名與 Email（同組多位組長時姓名會變下拉選單可切換）。</li>
+        <li>確認或修改姓名／Email 後，按「新增」「修改」或「刪除」即可，不需另外查看清單。</li>
+        <li>這裡填的 Email 同時決定組長可登入的線上表單帳號，以及「提報_XX組」「出席調查_XX組」分頁的試算表編輯權（組長只能看到、改到自己那組）。</li>
+      </ul>
+    </div>
     <div class="add-leader-row">
       <select id="inputNewLeaderGroup" onchange="處理新增組長組別選擇變更()">
         <option value="">請選擇組別...</option>
@@ -591,7 +616,13 @@
     </div>
     <div class="msg" id="msgLeaderList"></div>
 
-    <div class="desc" style="margin-top:18px;">（3）手動重新套用組長編輯權：一般情況下，「新增」「修改」「刪除」組長時系統都會自動同步分頁編輯權，不需要另外按這裡。但如果是先執行過「產生各組提報名單」，很久之後才陸續補齊組長 Email，或懷疑先前某次自動設定沒有成功，可以按下方按鈕，系統會用目前「組長名冊」整份資料重新套用一次，不會更動任何組長的姓名／Email。</div>
+    <div class="desc" style="margin-top:18px;">（3）手動重新套用組長編輯權：
+      <ul>
+        <li>一般不需要按這裡：新增／修改／刪除組長時系統會自動同步分頁編輯權。</li>
+        <li>適用時機：很久後才補齊組長 Email，或懷疑之前自動設定沒成功。</li>
+        <li>按下方按鈕會用目前「組長名冊」整份重新套用編輯權，不會更動姓名／Email。</li>
+      </ul>
+    </div>
     <div class="step-row">
       <button class="action secondary" onclick="處理重新套用組長編輯權按鈕點擊()">重新套用組長編輯權</button>
     </div>
@@ -604,21 +635,44 @@
   <div class="card">
     <h2>二、產生各組提報名單</h2>
 
-    <div class="desc">（1）本期匯入來源二選一：若這期要接續上一期封存產生的「下一期起始名單」微調，用下面「建立匯入來源分頁」（會自動偵測沿用）；若這期改用資料組整理好的最新 Excel 名單，用「上傳 Excel 檔案」直接匯入。兩者互斥，「匯入來源」分頁已經有資料時，不論哪一種都會先跳出確認視窗才覆蓋。</div>
+    <div class="desc">（1）本期匯入來源二選一：
+      <ul>
+        <li>沿用上一期名單微調：按「建立匯入來源分頁」（自動偵測沿用）。</li>
+        <li>改用資料組整理好的最新 Excel：用「上傳 Excel 檔案」直接匯入。</li>
+        <li>兩者互斥；「匯入來源」分頁已有資料時，都會先跳出確認視窗才覆蓋。</li>
+      </ul>
+    </div>
     <div class="step-row">
       <button class="action" id="btnCreateImportSheet" onclick="處理建立匯入來源分頁按鈕點擊()">建立匯入來源分頁（沿用上一期／貼上資料用）</button>
     </div>
 
-    <div class="desc" style="margin-top:12px;">（1b）上傳 Excel 檔案：選擇 Excel「提報名單（精簡版）」檔案後按下方按鈕，系統會自動建立/沿用「匯入來源」分頁，並依欄位名稱轉換好格式寫入（欄位順序、檔案裡有沒有多餘欄位都沒關係；「組別」會用「新任護法會職稱」反查「職務清單」自動帶出，查無對應的會先匯入、組別留空，事後再手動補）。上傳成功後會立刻同步更新上方「一、組長名冊管理」的組長姓名，不需要等「產生各組提報名單」執行過。</div>
+    <div class="desc" style="margin-top:12px;">（1b）上傳 Excel 檔案：
+      <ul>
+        <li>選擇 Excel「提報名單（精簡版）」後按鈕，自動建立/沿用「匯入來源」分頁並轉換格式。</li>
+        <li>欄位順序、多餘欄位皆無妨；「組別」會依「新任護法會職稱」反查職務清單自動帶出，查無對應則先留空、事後手動補。</li>
+        <li>上傳成功會立即同步更新「一、組長名冊管理」的組長姓名，不需等「產生各組提報名單」執行過。</li>
+      </ul>
+    </div>
     <div class="step-row">
       <input type="file" id="inputImportExcelFile" accept=".xlsx,.xls">
       <button class="action" id="btnUploadImportExcel" onclick="處理上傳Excel建立匯入來源按鈕點擊()">上傳並建立匯入來源</button>
     </div>
     <div class="msg" id="msgUploadImport"></div>
 
-    <div class="desc" style="margin-top:18px;">（1c）承上，上傳完成後建議先到「一、組長名冊管理」確認/補上各組組長的 Google 帳號 Email（姓名已自動帶入，Email 因為 Excel 沒有這個欄位，需要手動補）；「產生各組提報名單」會用這裡的 Email 設定各組分頁的編輯權限，所以順序建議是「上傳 Excel」→「補組長 Email」→「產生各組提報名單」。</div>
+    <div class="desc" style="margin-top:18px;">（1c）承上：
+      <ul>
+        <li>上傳完成後，建議先到「一、組長名冊管理」補上各組組長 Email（姓名已自動帶入，Email 因 Excel 無此欄位需手動補）。</li>
+        <li>「產生各組提報名單」會用這裡的 Email 設定分頁編輯權限。</li>
+        <li>建議順序：上傳 Excel → 補組長 Email → 產生各組提報名單。</li>
+      </ul>
+    </div>
 
-    <div class="desc" style="margin-top:18px;">（2）產生各組提報名單：確認「匯入來源」分頁資料已經備妥（不論是貼上的、沿用上一期的、還是剛上傳 Excel 轉換好的）後執行，會依組別自動拆分寫入各組分頁。</div>
+    <div class="desc" style="margin-top:18px;">（2）產生各組提報名單：
+      <ul>
+        <li>確認「匯入來源」分頁資料已備妥（貼上、沿用上一期、或剛上傳 Excel 轉換皆可）後執行。</li>
+        <li>系統會依組別自動拆分寫入各組分頁。</li>
+      </ul>
+    </div>
     <div class="step-row">
       <button class="action" id="btnImportReportList" onclick="處理匯入提報名單按鈕點擊()">產生各組提報名單</button>
     </div>
@@ -632,12 +686,22 @@
   <div class="card">
     <h2>三、檢核提報資料</h2>
 
-    <div class="desc">（1）檢核提報資料：用學員基本資料補齊姓名／法名／性別，查無資料的列會標黃提醒；同時針對組長只填姓名、沒填學員編號的情況自動反查，唯一命中會自動補回，同名多筆或查無資料會列入候選清單。</div>
+    <div class="desc">（1）檢核提報資料：
+      <ul>
+        <li>依學員基本資料補齊姓名／法名／性別；查無資料的列標黃提醒。</li>
+        <li>組長只填姓名、未填學員編號時自動反查：唯一命中自動補回，同名多筆或查無資料則列入候選清單。</li>
+      </ul>
+    </div>
     <div class="step-row">
       <button class="action" id="btnCheckReportData" onclick="處理檢核提報資料按鈕點擊()">檢核提報資料</button>
     </div>
 
-    <div class="desc" style="margin-top:18px;">（2）候選清單核對回填：檢核完不會自動顯示明細，請按「顯示候選清單」開新分頁查看，核對後在候選學員編號欄位確認並回填。</div>
+    <div class="desc" style="margin-top:18px;">（2）候選清單核對回填：
+      <ul>
+        <li>檢核完不會自動顯示明細，按「顯示候選清單」開新分頁查看。</li>
+        <li>核對後在候選學員編號欄位確認並回填。</li>
+      </ul>
+    </div>
     <div class="step-row">
       <button class="action secondary" id="btnRefreshCandidateList" onclick="window.open('review-lists.html?type=candidates', '_blank')">顯示候選清單</button>
       <button class="action secondary" id="btnDownloadCandidateList" onclick="處理下載候選清單按鈕點擊()">下載候選清單</button>
@@ -652,12 +716,23 @@
   <div class="card">
     <h2>四、檢核聘書數</h2>
 
-    <div class="desc">（1）檢核聘書數：依學員編號彙總全體職務數，超過門檻（3張聘書）的人整列標紅，並列入「待複核清單」。</div>
+    <div class="desc">（1）檢核聘書數：
+      <ul>
+        <li>依學員編號彙總全體職務數。</li>
+        <li>超過門檻（3張聘書）的人整列標紅，並列入「待複核清單」。</li>
+      </ul>
+    </div>
     <div class="step-row">
       <button class="action" id="btnSummarizeOverLimit" onclick="處理彙總職務數與超額標色按鈕點擊()">檢核聘書數</button>
     </div>
 
-    <div class="desc" style="margin-top:18px;">（2）待複核清單決議：檢核完不會自動顯示明細，請按「顯示待複核清單」開新分頁查看，請法師會議逐筆針對「這一筆職務」勾選保留或取消（取消要填原因），選好後在該頁按「送出決議」一次送出。</div>
+    <div class="desc" style="margin-top:18px;">（2）待複核清單決議：
+      <ul>
+        <li>檢核完不會自動顯示明細，按「顯示待複核清單」開新分頁查看。</li>
+        <li>法師會議逐筆針對「這一筆職務」勾選保留或取消（取消需填原因）。</li>
+        <li>選好後在該頁按「送出決議」一次送出。</li>
+      </ul>
+    </div>
     <div class="step-row">
       <button class="action secondary" id="btnRefreshReviewList" onclick="window.open('review-lists.html?type=pending', '_blank')">顯示待複核清單</button>
       <button class="action secondary" id="btnDownloadReviewList" onclick="處理下載待複核清單按鈕點擊()">下載待複核清單</button>
@@ -675,7 +750,14 @@
   <div class="card">
     <h2>五、產出核定名單</h2>
 
-    <div class="desc">產出核定名單：確認「待複核清單」所有超額項目都已決議完畢後執行，系統會彙整所有有效聘任的職務、扣除決議取消的部分，產出核定名單（同步刷新原始版快照）。若還有未決議項目會提醒，不會產出。產出完不會自動顯示明細，請按「顯示核定名單」查看。產出後接著請到「六、出席回報管理」指定身兼多組學員的負責組別，最後再到「七、輸出至報到系統」把名單送到報到系統。</div>
+    <div class="desc">
+      <ul>
+        <li>確認「待複核清單」所有超額項目皆已決議完畢後執行；若還有未決議項目會提醒、不會產出。</li>
+        <li>系統彙整所有有效聘任職務、扣除已取消部分，產出核定名單（同步刷新原始版快照）。</li>
+        <li>產出完不會自動顯示明細，按「顯示核定名單」查看。</li>
+        <li>產出後接著到「六、出席回報管理」指定身兼多組學員的負責組別，最後到「七、輸出至報到系統」送出名單。</li>
+      </ul>
+    </div>
     <div class="step-row">
       <button class="action" id="btnGenerateApprovedList" onclick="處理套用決議並產出核定名單按鈕點擊()">產出核定名單</button>
       <button class="action secondary" id="btnRefreshApprovedList" onclick="window.open('review-lists.html?type=approved', '_blank')">顯示核定名單</button>
@@ -691,7 +773,14 @@
   <div class="card">
     <h2>六、出席回報管理</h2>
 
-    <div class="desc">（1）出席回報負責組別指定：核定名單中「聘書總數 ≥ 2」（身兼多組）的學員，需要指定一組「負責組別」，決定這位學員的出席由哪一組負責上台確認；只有一組聘書的學員不需要指定，系統自動視為該組負責。按下方按鈕後，系統會直接在「資料庫試算表」產生／更新一個「出席回報負責組別」工作頁，請直接到那個工作頁，用「負責組別」欄位的下拉選單逐一選定即可（不需要在這個網頁上操作）。若核定名單後續有異動，重新按一次本按鈕即可更新工作頁，已經選過的負責組別不會被清空。<strong>這裡的指定結果也是「七、輸出至報到系統」的必要前置條件——聘書≥2張的學員沒指定完，輸出至報到系統會被擋下。</strong></div>
+    <div class="desc">（1）出席回報負責組別指定：
+      <ul>
+        <li>聘書總數 ≥ 2（身兼多組）的學員需指定一組「負責組別」，決定由哪組負責上台確認出席；僅一組聘書者系統自動視為該組負責，不需指定。</li>
+        <li>按下方按鈕後，會在「資料庫試算表」產生／更新「出席回報負責組別」工作頁，直接在該頁用下拉選單逐一選定即可（不在本網頁操作）。</li>
+        <li>核定名單後續異動時，重新按一次本按鈕即可更新工作頁，已選定的不會被清空。</li>
+        <li><strong>聘書≥2張的學員沒指定完負責組別，「七、輸出至報到系統」會被擋下。</strong></li>
+      </ul>
+    </div>
     <div class="step-row">
       <button class="action" id="btnGenerateResponsibleGroupSheet" onclick="處理產生負責組別工作表按鈕點擊()">產生／更新負責組別調查表</button>
       <button class="action secondary" id="btnOpenResponsibleGroupSheet" onclick="處理開啟負責組別工作表按鈕點擊()">開啟負責組別調整工作表</button>
@@ -699,7 +788,14 @@
     </div>
     <div class="msg" id="msgResponsibleGroup"></div>
 
-    <div class="desc" style="margin-top:18px;">（2）出席調查表：請先完成上方（1）的負責組別指定，再按「產生出席調查表」。系統會依「負責組別」把全體學員分組，在「出席回報試算表」整批（重新）產生各組獨立的「出席調查」工作頁，組長本人直接到自己組別的工作頁，在「出席」欄位打勾即可（隨打隨存，不需要另外登入或送出）。下方按「開啟出席回報調查表」會開新分頁前往整份「出席回報試算表」，各組請自行切換到對應的工作頁分頁。</div>
+    <div class="desc" style="margin-top:18px;">（2）出席調查表：
+      <ul>
+        <li>先完成上方（1）負責組別指定，再按「產生出席調查表」。</li>
+        <li>系統依「負責組別」分組，在「出席回報試算表」整批（重新）產生各組獨立工作頁。</li>
+        <li>組長到自己組別工作頁勾選「出席」即可，隨打隨存，不需登入或送出。</li>
+        <li>按「開啟出席回報調查表」開新分頁前往整份試算表，各組自行切換到對應工作頁。</li>
+      </ul>
+    </div>
     <div id="attendanceSurveyListArea" style="margin-top:10px;"><div class="empty-hint">尚未產生出席調查表。</div></div>
     <div class="msg" id="msgAttendanceSurvey"></div>
   </div>
@@ -713,7 +809,15 @@
   <div class="card">
     <h2>七、輸出至報到系統</h2>
 
-    <div class="desc">把目前的核定名單輸出到報到系統，變成一個可以現場報到的場次。只有在出席調查表「負責組別」那一列已經打勾出席的人，才會被送到報到系統；未打勾者一律不會出現在報到名單裡（不強制要求填寫備註，備註欄位僅供資料組自行記錄參考）。若身兼多組職務的學員在核定名單中重複多筆，只會依「負責組別」那一列判斷（其餘身兼組別會合併寫在「注意事項」欄位）；<strong>聘書總數≥2張的學員，一定要先到「六、出席回報管理」的「出席回報負責組別」工作頁指定好負責組別，這裡才能執行輸出，否則會整批擋下並列出尚未指定的人員名單；另外，出席調查表若完全還沒產生過，系統也會提示先到「六」按「產生出席調查表」</strong>。場次代碼欄位可以直接從下拉選單挑選已存在的場次（挑選後即為覆蓋該場次），或輸入尚未出現過的代碼建立新場次；場次代碼若已存在，需二次確認後才會用最新核定名單覆蓋，「場次名稱」「公告文字」設定維持不變；若該場次已經有人報到過，系統會直接拒絕輸出。也可以選擇既有場次後按「刪除場次」直接移除（無論是否已有人報到，僅會再跳出一次瀏覽器確認視窗，此操作無法復原）。</div>
+    <div class="desc">
+      <ul>
+        <li>把核定名單輸出到報到系統，成為可現場報到的場次；只有出席調查表「負責組別」已打勾出席的人才會送出，未打勾者不會出現在報到名單（備註欄位僅供參考，非必填）。</li>
+        <li>身兼多組者只依「負責組別」那一列判斷、只送出一列，其餘身兼組別合併寫在「注意事項」欄位。</li>
+        <li><strong>聘書≥2張的學員須先在「六」指定好負責組別才能輸出，否則整批擋下並列出未指定名單；出席調查表尚未產生過也會提示先到「六」產生。</strong></li>
+        <li>場次代碼可從下拉選單挑選既有場次（覆蓋）或輸入新代碼建立新場次；已存在的場次需二次確認才會覆蓋，「場次名稱」「公告文字」維持不變；已有人報到過的場次會拒絕輸出。</li>
+        <li>也可選擇既有場次按「刪除場次」直接移除（無論是否已報到），僅跳出一次瀏覽器確認視窗，此操作無法復原。</li>
+      </ul>
+    </div>
     <div class="step-row">
       <input type="text" id="inputExportSessionCode" list="sessionCodeDatalist" autocomplete="off" placeholder="場次代碼（可從下拉選單挑選既有場次，或輸入新代碼）" oninput="處理場次代碼欄位變更()" style="max-width:280px;">
       <datalist id="sessionCodeDatalist"></datalist>
