@@ -8,8 +8,16 @@
   /*
    * ============================================================
    * 檔案：現場報到人數看板（大螢幕顯示用，模組4附屬頁面）
-   * 版本：v1.1（2026-09-30，法師現場投影機實測反映）
+   * 版本：v1.2（2026-09-30，法師訪談決議微調版面比例與最近報到排版）
    * 版本歷程：
+   *   v1.2（2026-09-30）：
+   *     (1) 版面比例調整：左邊「報到進度總覽」與右邊「最近報到」
+   *         欄寬比例由 1.3:1 改成 2:1，報到進度區塊佔畫面約 2/3，
+   *         最近報到區塊佔約 1/3。
+   *     (2)「最近報到」每一筆原本姓名（法名）＋組別＋報到時間排在
+   *         同一行（左右對齊），姓名較長時容易擠在一起換行；改成
+   *         上下兩行：第一行「姓名（法名） 組別」、第二行「報到
+   *         時間」，讓資訊分層更清楚。
    *   v1.1（2026-09-30）：
    *     (1) 深色底（--color-bg 原為 #2E2418 深咖啡近黑）投影機投影
    *         出來不明顯、對比不足，改成淺色系（米白底＋深咖啡文字），
@@ -201,9 +209,12 @@
     overflow: hidden;
   }
   .recent-item {
+    /* 【2026-09-30 法師訪談決議調整】改成上下兩行：
+       第一行「姓名（法名） 組別」、第二行「報到時間」，
+       避免姓名+法名較長時跟組別/時間擠在同一行造成換行、版面混亂 */
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
     /* 【v1.1 調整】淺色系改用比白色面板稍深一階的米色底，
        避免跟 .panel 的白底混在一起分不清每一筆的區塊界線 */
     background: var(--color-accent-bar-bg);
@@ -226,6 +237,7 @@
     color: var(--color-success);
     font-size: 15px;
     white-space: nowrap;
+    margin-top: 4px;
   }
   .empty-hint {
     color: var(--color-subtitle);
@@ -408,7 +420,7 @@ function 重繪最近報到名單(arr最近報到) {
     elItem.className = "recent-item";
     const str姓名法名 = obj一筆.姓名 + (obj一筆.法名 ? "（" + obj一筆.法名 + "）" : "");
     elItem.innerHTML =
-      "<span><span class='name'></span><span class='group'></span></span>" +
+      "<span class='line1'><span class='name'></span><span class='group'></span></span>" +
       "<span class='time'></span>";
     elItem.querySelector(".name").textContent = str姓名法名;
     elItem.querySelector(".group").textContent = obj一筆.組別 || "";
