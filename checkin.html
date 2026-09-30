@@ -12,9 +12,21 @@
   /*
    * ============================================================
    * 檔案：現場報到掃碼頁（模組4）
-   * 版本：v2.5（2026-09-30，法師訪談決議，比照舊版報到系統新增
-   *       「報到進度總覽」；本檔案自此正式定名為 checkin.html 上線，
-   *       不再使用「checkin-新版.html」這個過渡期檔名）
+   * 版本：v2.7（2026-09-30，法師訪談決議：LOGO 改放系統名稱右側）
+   * 版本歷程：
+   *   - v2.7（2026-09-30）：原本標題區是「大張完整版 LOGO（logo-full.jpg）
+   *     置中放在系統名稱上方」，法師確認改成「縮小的精簡版 LOGO
+   *     （logo-icon.jpg）放在系統名稱同一行的右側」，比照三個操作
+   *     頁面（temple-admin.html 等）標題列已經使用小圖示的做法，
+   *     差別只在圖示放在文字右邊而不是左邊。h1 改用 flex 排版，
+   *     文字靠左、圖示靠右對齊；移除原本的 .logo-wrap 大圖區塊與
+   *     對應樣式。
+   *   - v2.6（2026-09-30，法師實機測試反映，修正手動輸入時
+   *     報到結果被手機鍵盤擋住／捲走的問題，詳見「送出報到」
+   *     函式的 v1.2 版本說明）
+   *   - v2.5（2026-09-30，法師訪談決議，比照舊版報到系統新增
+   *     「報到進度總覽」；本檔案自此正式定名為 checkin.html 上線，
+   *     不再使用「checkin-新版.html」這個過渡期檔名）
    * 說明：
    *   給活動現場使用的報到頁面，不需要精舍登入密碼
    *   （2026-09-16 訪談確認），精舍代碼與場次代碼由網址參數帶入，
@@ -125,24 +137,27 @@
     max-width: 480px;
     margin: 0 auto;
   }
-  .header-card .logo-wrap {
-    text-align: center;
-    margin-bottom: 10px;
-  }
-  .header-card .logo-wrap img {
-    width: 160px;
-    max-width: 70%;
-    height: auto;
-  }
   .header-card {
     padding: 4px 4px 18px 4px;
     margin-bottom: 18px;
     border-bottom: 1px solid var(--color-card-border);
   }
+  /* 【2026-09-30 法師訪談決議調整】LOGO 縮小改放在系統名稱右側，
+     不再用大圖置中放在標題上方（原本的 .logo-wrap 大圖作法）；
+     系統名稱與小圖示排成同一行，圖示靠右對齊 */
   .header-card h1 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     font-size: 21px;
     margin: 0 0 6px 0;
     color: var(--color-title);
+  }
+  .header-card h1 .title-logo-icon {
+    height: 30px;
+    width: auto;
+    flex-shrink: 0;
   }
   .header-card .session-line {
     font-size: 14px;
@@ -328,8 +343,7 @@
 <div class="wrap" id="mainContent" style="display:none;">
 
   <div class="header-card">
-    <div class="logo-wrap"><img src="logo-full.jpg" alt="護法會雲端系統 Dharma Protector Cloud System"></div>
-    <h1>護法會頒證出席報到系統</h1>
+    <h1><span>護法會頒證出席報到系統</span><img class="title-logo-icon" src="logo-icon.jpg" alt="護法會雲端系統"></h1>
     <div class="session-line">目前報到場次：<span id="sessionNameShow"></span></div>
     <div class="announcement" id="announcementShow"></div>
     <div id="endedBadge" style="display:none;" class="status-ended">本場次報到已結束</div>
@@ -529,6 +543,21 @@ function 顯示候選清單(arr候選清單) {
  *       移除了，卻忘記在報到成功訊息裡把姓名資料加回來。
  *       修正方式：報到成功時，在訊息中加入「姓名（法名）」，
  *       顯示在「✓ 報到成功！」之下、注意事項之上。
+ * 變更說明（v1.2，2026-09-30 法師實機測試反映）：
+ *   法師反映：用相機掃描時，畫面不會移動，報到結果永遠看得到；
+ *   但改用下方欄位手動輸入姓名時，手機鍵盤彈出來會把畫面往上推
+ *   （瀏覽器會自動把正在輸入的欄位捲到看得到的位置），導致送出
+ *   報到後，位在輸入欄位「上方」的報到結果卡片被推到螢幕外，看
+ *   不到剛才的報到結果。
+ *   修正方式：取得後端回應後，不論成功或失敗，一律先呼叫
+ *   inputStudentId.blur() 讓輸入欄位失去焦點、收起手機鍵盤，再用
+ *   cardResult.scrollIntoView() 把畫面捲動到報到結果卡片，確保
+ *   操作人員一定看得到這次的報到結果。原本報到成功後會立刻把
+ *   游標移回輸入框（focus()）準備打下一位，這個動作會讓鍵盤馬上
+ *   又跳出來、把剛顯示好的結果訊息再次擋住／捲走，因此這次拿掉
+ *   自動移回焦點，改成只清空輸入內容，操作人員看完結果後自行點
+ *   一下輸入框即可繼續輸入下一位（不影響相機連續掃描：掃描流程
+ *   本來就不會用到這個輸入框，行為不受影響）。
  * 參數：
  *   str輸入內容 - 學員編號或姓名（來自輸入框，或候選清單點選的
  *                 學員編號）
@@ -540,6 +569,7 @@ async function 送出報到(str輸入內容) {
   清空候選清單();
 
   const btn查詢按鈕 = document.getElementById("btnSearch");
+  const elInput = document.getElementById("inputStudentId");
   btn查詢按鈕.disabled = true;
   顯示區塊訊息("msgResult", "處理中，請稍候...", "info");
 
@@ -551,6 +581,12 @@ async function 送出報到(str輸入內容) {
       場次代碼: 取得網址參數("session"),
       學員編號: str輸入內容
     });
+
+    // 【v1.2 新增】不論接下來要顯示成功、候選清單、還是失敗訊息，
+    // 都先收起手機鍵盤＋捲動到結果卡片，確保手動輸入時也一定看得到
+    // 這次的報到結果（詳見上方版本說明）
+    elInput.blur();
+    document.getElementById("cardResult").scrollIntoView({ behavior: "smooth", block: "start" });
 
     if (objResult.成功) {
       // 報到成功後除了顯示注意事項欄位內容（2026-09-16 訪談確認），
@@ -568,9 +604,10 @@ async function 送出報到(str輸入內容) {
         組合含注意事項訊息(str含姓名訊息, objResult.注意事項),
         "success"
       );
-      // 報到成功後清空輸入框，準備讓下一位報到
-      document.getElementById("inputStudentId").value = "";
-      document.getElementById("inputStudentId").focus();
+      // 報到成功後清空輸入框，準備讓下一位報到；【v1.2 修正】不再
+      // 立即 focus() 移回輸入框，避免鍵盤馬上跳出來又把結果訊息
+      // 擋住／捲走，操作人員看完結果後自行點輸入框即可繼續下一位
+      elInput.value = "";
       return;
     }
 
