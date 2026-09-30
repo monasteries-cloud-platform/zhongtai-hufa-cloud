@@ -8,7 +8,17 @@
   /*
    * ============================================================
    * 檔案：現場報到人數看板（大螢幕顯示用，模組4附屬頁面）
-   * 版本：v1.0（2026-09-30，法師訪談決議新增）
+   * 版本：v1.1（2026-09-30，法師現場投影機實測反映）
+   * 版本歷程：
+   *   v1.1（2026-09-30）：
+   *     (1) 深色底（--color-bg 原為 #2E2418 深咖啡近黑）投影機投影
+   *         出來不明顯、對比不足，改成淺色系（米白底＋深咖啡文字），
+   *         跟系統其他頁面的配色一致，投影機／電視顯示對比更清楚。
+   *     (2) 總計進度原本是「大數字百分比＋長條進度條」，改成圓餅圖
+   *         （CSS conic-gradient 實作的甜甜圈圖，不需要額外圖表
+   *         函式庫），百分比文字放在圓餅圖正中央，遠距離觀看更直覺、
+   *         更適合大螢幕呈現。
+   *   v1.0（2026-09-30，法師訪談決議新增）：初版，深色底＋長條進度條。
    * 說明：
    *   給活動現場大螢幕（電視／投影幕）使用的公開看板，不需要
    *   登入，網址參數跟現場報到頁 checkin.html 相同：
@@ -28,14 +38,16 @@
    * ============================================================
    */
   :root {
-    --color-bg: #2E2418;
-    --color-panel-bg: #3B2F1F;
-    --color-panel-border: #5A4A32;
-    --color-title: #F5F1E6;
-    --color-subtitle: #C9B9A3;
-    --color-accent: #D8A657;
-    --color-accent-bar-bg: #4A3B27;
-    --color-success: #7FB069;
+    /* 【v1.1 調整】改成淺色系，投影機／電視投影對比較清楚，跟系統
+       其他頁面（登入頁、報到頁等）的米白＋深咖啡配色維持一致 */
+    --color-bg: #FBF8F1;
+    --color-panel-bg: #FFFFFF;
+    --color-panel-border: #E4DCC8;
+    --color-title: #2E2418;
+    --color-subtitle: #8A7B63;
+    --color-accent: #6B4226;
+    --color-accent-bar-bg: #EDE6D6;
+    --color-success: #3F6B2E;
   }
   * { box-sizing: border-box; }
   body {
@@ -86,9 +98,11 @@
     font-size: 16px;
   }
 
+  /* 【2026-09-30 法師訪談決議調整】版面比例改成左邊「報到進度總覽」
+     佔 2/3、右邊「最近報到」佔 1/3（原本是 1.3:1，比較接近對半） */
   .layout {
     display: grid;
-    grid-template-columns: 1.3fr 1fr;
+    grid-template-columns: 2fr 1fr;
     gap: 24px;
   }
   @media (max-width: 900px) {
@@ -109,35 +123,56 @@
     letter-spacing: 1px;
   }
 
-  /* 總計：大字體百分比，遠距離也看得清楚 */
+  /* 【v1.1 新增】總計進度改用圓餅圖（甜甜圈圖）呈現，比大數字＋
+     長條進度條更適合遠距離觀看，一眼就能看出報到比例。用純 CSS
+     conic-gradient 畫圓餅圖，不需要載入額外的圖表函式庫；中間挖空
+     放百分比文字（.pie-center），JS 每次更新只需要改變
+     .pie-chart 的 background 漸層角度即可，見「更新報到進度看板」。 */
   .total-row {
     display: flex;
-    align-items: baseline;
-    gap: 16px;
-    margin-bottom: 10px;
+    align-items: center;
+    gap: 32px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
   }
-  .total-percent {
-    font-size: 64px;
+  .pie-chart {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: conic-gradient(var(--color-accent-bar-bg) 0% 100%);
+  }
+  .pie-chart::before {
+    content: "";
+    position: absolute;
+    inset: 20px;
+    background: var(--color-panel-bg);
+    border-radius: 50%;
+  }
+  .pie-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .pie-percent {
+    font-size: 44px;
     font-weight: bold;
     color: var(--color-accent);
     line-height: 1;
   }
+  .pie-label {
+    font-size: 13px;
+    color: var(--color-subtitle);
+    margin-top: 4px;
+  }
   .total-count {
-    font-size: 22px;
+    font-size: 24px;
     color: var(--color-title);
-  }
-  .progress-bar-bg {
-    background: var(--color-accent-bar-bg);
-    border-radius: 8px;
-    width: 100%;
-    height: 16px;
-    overflow: hidden;
-    margin: 14px 0 26px 0;
-  }
-  .progress-bar-fill {
-    background: var(--color-accent);
-    height: 100%;
-    transition: width 0.6s ease;
+    font-weight: bold;
   }
 
   table.group-table {
@@ -169,7 +204,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: var(--color-bg);
+    /* 【v1.1 調整】淺色系改用比白色面板稍深一階的米色底，
+       避免跟 .panel 的白底混在一起分不清每一筆的區塊界線 */
+    background: var(--color-accent-bar-bg);
     border: 1px solid var(--color-panel-border);
     border-radius: 10px;
     padding: 12px 16px;
@@ -221,10 +258,14 @@
     <div class="panel">
       <h2>報到進度總覽</h2>
       <div class="total-row">
-        <div class="total-percent" id="totalPercentShow">0%</div>
+        <div class="pie-chart" id="pieChart">
+          <div class="pie-center">
+            <div class="pie-percent" id="totalPercentShow">0%</div>
+            <div class="pie-label">已報到</div>
+          </div>
+        </div>
         <div class="total-count" id="totalCountShow">已報到 0 / 0 人</div>
       </div>
-      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div></div>
 
       <table class="group-table">
         <thead><tr><th>組別</th><th>已報到</th><th>總人數</th><th>報到率</th></tr></thead>
@@ -298,7 +339,12 @@ async function 更新報到進度看板() {
     document.getElementById("totalPercentShow").textContent = int百分比 + "%";
     document.getElementById("totalCountShow").textContent =
       "已報到 " + objResult.已報到人數 + " / " + objResult.總人數 + " 人";
-    document.getElementById("progressBarFill").style.width = int百分比 + "%";
+
+    // 【v1.1 新增】用 conic-gradient 畫圓餅圖：0% 到「百分比」這段
+    // 用強調色（已報到），剩下的用淺底色（未報到），只要改這一行
+    // 的漸層百分比就能更新整個圓餅圖，不需要額外圖表函式庫
+    document.getElementById("pieChart").style.background =
+      "conic-gradient(var(--color-accent) 0% " + int百分比 + "%, var(--color-accent-bar-bg) " + int百分比 + "% 100%)";
 
     重繪各組統計表格(objResult.依組別統計 || []);
     重繪最近報到名單(objResult.最近報到 || []);
