@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>護法會報到人數看板</title>
+<style>
+  /*
+   * ============================================================
+   * 檔案：現場報到人數看板（大螢幕顯示用，模組4附屬頁面）
+   * 版本：v1.0（2026-09-30，法師訪談決議新增）
+   * 說明：
+   *   給活動現場大螢幕（電視／投影幕）使用的公開看板，不需要
+   *   登入，網址參數跟現場報到頁 checkin.html 相同：
+   *     checkin-dashboard.html?temple=A&session=1025
+   *   內容比照 checkin.html 的「報到進度總覽」卡片（總計＋依組別
+   *   統計，含報到率），並新增「最近報到名單」，隨現場報到情況
+   *   每 5 秒自動刷新一次，不需要人工操作或重新整理頁面。
+   *   本頁純顯示、無任何輸入或掃描功能，跟 checkin.html（操作
+   *   人員用來執行報到）分成兩個獨立頁面，避免大螢幕上出現不會
+   *   用到的輸入框或相機畫面。
+   *   2026-09-30 訪談決議：現場工作人員提醒，最近報到名單直接
+   *   公開顯示姓名在大螢幕上，現場人員應留意螢幕擺放位置與觀看
+   *   對象，若日後需要調整揭露範圍（例如只顯示法名不顯示姓名、
+   *   或完全不顯示名單只留人數統計），可再訪談調整，後端 API
+   *   （查詢報到進度統計）已把「最近報到」設計成獨立欄位，前端
+   *   要拿掉這塊顯示不需要改動後端。
+   * ============================================================
+   */
+  :root {
+    --color-bg: #2E2418;
+    --color-panel-bg: #3B2F1F;
+    --color-panel-border: #5A4A32;
+    --color-title: #F5F1E6;
+    --color-subtitle: #C9B9A3;
+    --color-accent: #D8A657;
+    --color-accent-bar-bg: #4A3B27;
+    --color-success: #7FB069;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "微軟正黑體", "PMingLiU", sans-serif;
+    background: var(--color-bg);
+    color: var(--color-title);
+    margin: 0;
+    padding: 28px 40px;
+    min-height: 100vh;
+  }
+  #loadingNotice {
+    text-align: center;
+    color: var(--color-subtitle);
+    font-size: 28px;
+    padding: 80px 0;
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 22px;
+  }
+  .header img {
+    height: 64px;
+    width: auto;
+  }
+  .header .titles h1 {
+    margin: 0;
+    font-size: 30px;
+    color: var(--color-title);
+  }
+  .header .titles .session-line {
+    margin-top: 4px;
+    font-size: 18px;
+    color: var(--color-subtitle);
+  }
+  .header .titles .announcement {
+    margin-top: 2px;
+    font-size: 15px;
+    color: var(--color-subtitle);
+  }
+  .status-ended {
+    margin-left: auto;
+    background: #B3372C;
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 16px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--color-panel-bg);
+    border: 1px solid var(--color-panel-border);
+    border-radius: 16px;
+    padding: 24px 28px;
+  }
+  .panel h2 {
+    margin: 0 0 16px 0;
+    font-size: 20px;
+    color: var(--color-subtitle);
+    font-weight: normal;
+    letter-spacing: 1px;
+  }
+
+  /* 總計：大字體百分比，遠距離也看得清楚 */
+  .total-row {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 10px;
+  }
+  .total-percent {
+    font-size: 64px;
+    font-weight: bold;
+    color: var(--color-accent);
+    line-height: 1;
+  }
+  .total-count {
+    font-size: 22px;
+    color: var(--color-title);
+  }
+  .progress-bar-bg {
+    background: var(--color-accent-bar-bg);
+    border-radius: 8px;
+    width: 100%;
+    height: 16px;
+    overflow: hidden;
+    margin: 14px 0 26px 0;
+  }
+  .progress-bar-fill {
+    background: var(--color-accent);
+    height: 100%;
+    transition: width 0.6s ease;
+  }
+
+  table.group-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 18px;
+  }
+  table.group-table th, table.group-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-panel-border);
+  }
+  table.group-table th {
+    color: var(--color-subtitle);
+    font-weight: normal;
+    font-size: 15px;
+  }
+  table.group-table td.rate { color: var(--color-accent); font-weight: bold; }
+
+  /* 最近報到名單：新的一筆從上方帶入，維持「滾動更新」的感覺 */
+  .recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 640px;
+    overflow: hidden;
+  }
+  .recent-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--color-bg);
+    border: 1px solid var(--color-panel-border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 19px;
+    animation: fadeIn 0.5s ease;
+  }
+  .recent-item .name {
+    color: var(--color-title);
+    font-weight: bold;
+  }
+  .recent-item .group {
+    color: var(--color-subtitle);
+    font-size: 15px;
+    margin-left: 8px;
+  }
+  .recent-item .time {
+    color: var(--color-success);
+    font-size: 15px;
+    white-space: nowrap;
+  }
+  .empty-hint {
+    color: var(--color-subtitle);
+    font-size: 16px;
+    padding: 10px 0;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<div id="loadingNotice">載入中，請稍候...</div>
+
+<div id="mainContent" style="display:none;">
+
+  <div class="header">
+    <img src="logo-icon.jpg" alt="護法會雲端系統">
+    <div class="titles">
+      <h1 id="sessionNameShow"></h1>
+      <div class="session-line">報到人數看板</div>
+      <div class="announcement" id="announcementShow"></div>
+    </div>
+    <div id="endedBadge" class="status-ended" style="display:none;">本場次報到已結束</div>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>報到進度總覽</h2>
+      <div class="total-row">
+        <div class="total-percent" id="totalPercentShow">0%</div>
+        <div class="total-count" id="totalCountShow">已報到 0 / 0 人</div>
+      </div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div></div>
+
+      <table class="group-table">
+        <thead><tr><th>組別</th><th>已報到</th><th>總人數</th><th>報到率</th></tr></thead>
+        <tbody id="groupStatsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>最近報到</h2>
+      <div class="recent-list" id="recentList">
+        <div class="empty-hint">尚無報到紀錄</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="config.js"></script>
+<script>
+/**
+ * ============================================================
+ * 現場報到人數看板－前端邏輯
+ * 版本：v1.0（2026-09-30）
+ * ============================================================
+ */
+
+/**
+ * ------------------------------------------------------------
+ * 函式：取得網址參數
+ * 版本：v1.0（2026-09-30，沿用 checkin.html 同名函式的做法）
+ * 用途：從目前網址的查詢字串中取出指定參數值。
+ * 參數：
+ *   strKey - 參數名稱
+ * 回傳：str 參數值，找不到時回傳空字串
+ * ------------------------------------------------------------
+ */
+function 取得網址參數(strKey) {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(strKey) || "";
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：更新報到進度看板
+ * 版本：v1.0（2026-09-30）
+ * 用途：呼叫後端「查詢報到進度統計」action（與 checkin.html 共用
+ *       同一支 API），取得總計、依組別統計、最近報到名單，重繪
+ *       畫面上所有動態內容。每 5 秒自動呼叫一次，讓大螢幕不需要
+ *       人工操作就能持續顯示最新報到狀況。
+ * 參數：無（直接從網址參數讀取精舍代碼、場次代碼）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+async function 更新報到進度看板() {
+  try {
+    const objResult = await 呼叫後端API({
+      system: "現場報到",
+      action: "查詢報到進度統計",
+      精舍代碼: 取得網址參數("temple"),
+      場次代碼: 取得網址參數("session")
+    });
+
+    if (!objResult.成功) {
+      return; // 看板顯示失敗時安靜略過，等下一次 5 秒後重試，不打斷畫面
+    }
+
+    const int百分比 = objResult.總人數 > 0
+      ? Math.round((objResult.已報到人數 / objResult.總人數) * 100)
+      : 0;
+
+    document.getElementById("totalPercentShow").textContent = int百分比 + "%";
+    document.getElementById("totalCountShow").textContent =
+      "已報到 " + objResult.已報到人數 + " / " + objResult.總人數 + " 人";
+    document.getElementById("progressBarFill").style.width = int百分比 + "%";
+
+    重繪各組統計表格(objResult.依組別統計 || []);
+    重繪最近報到名單(objResult.最近報到 || []);
+  } catch (錯誤) {
+    console.error("更新報到進度看板時發生錯誤：", 錯誤);
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：重繪各組統計表格
+ * 版本：v1.0（2026-09-30）
+ * 用途：把「依組別統計」陣列畫成表格列，並計算各組報到率
+ *       （已報到人數÷總人數，前端計算，不需要後端額外回傳）。
+ * 參數：
+ *   arr依組別統計 - { 組別, 已報到人數, 總人數 } 物件陣列
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 重繪各組統計表格(arr依組別統計) {
+  const elTbody = document.getElementById("groupStatsBody");
+  elTbody.innerHTML = "";
+
+  arr依組別統計.forEach(function (obj這一組) {
+    const int組百分比 = obj這一組.總人數 > 0
+      ? Math.round((obj這一組.已報到人數 / obj這一組.總人數) * 100)
+      : 0;
+    const elTr = document.createElement("tr");
+    elTr.innerHTML = "<td></td><td></td><td></td><td class='rate'></td>";
+    elTr.children[0].textContent = obj這一組.組別;
+    elTr.children[1].textContent = obj這一組.已報到人數;
+    elTr.children[2].textContent = obj這一組.總人數;
+    elTr.children[3].textContent = int組百分比 + "%";
+    elTbody.appendChild(elTr);
+  });
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：重繪最近報到名單
+ * 版本：v1.0（2026-09-30）
+ * 用途：把後端回傳的「最近報到」陣列（已依報到時間新到舊排序）
+ *       畫成清單，最新一筆在最上方；每次刷新整份重繪，讓新報到
+ *       的人自然「滾」到清單最上面，達成隨報到狀況捲動更新的效果。
+ * 參數：
+ *   arr最近報到 - { 姓名, 法名, 組別, 報到時間 } 物件陣列
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 重繪最近報到名單(arr最近報到) {
+  const elList = document.getElementById("recentList");
+
+  if (!arr最近報到 || arr最近報到.length === 0) {
+    elList.innerHTML = "<div class='empty-hint'>尚無報到紀錄</div>";
+    return;
+  }
+
+  elList.innerHTML = "";
+  arr最近報到.forEach(function (obj一筆) {
+    const elItem = document.createElement("div");
+    elItem.className = "recent-item";
+    const str姓名法名 = obj一筆.姓名 + (obj一筆.法名 ? "（" + obj一筆.法名 + "）" : "");
+    elItem.innerHTML =
+      "<span><span class='name'></span><span class='group'></span></span>" +
+      "<span class='time'></span>";
+    elItem.querySelector(".name").textContent = str姓名法名;
+    elItem.querySelector(".group").textContent = obj一筆.組別 || "";
+    elItem.querySelector(".time").textContent = obj一筆.報到時間 || "";
+    elList.appendChild(elItem);
+  });
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：初始化頁面
+ * 版本：v1.0（2026-09-30）
+ * 用途：頁面載入時執行，檢查網址參數是否齊全，呼叫「查詢場次
+ *       公開資訊」取得場次名稱與公告文字顯示在頁首，之後啟動
+ *       「更新報到進度看板」並每 5 秒自動刷新一次。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+async function 初始化頁面() {
+  const str精舍代碼 = 取得網址參數("temple");
+  const str場次代碼 = 取得網址參數("session");
+
+  if (!str精舍代碼 || !str場次代碼) {
+    document.getElementById("loadingNotice").textContent =
+      "網址參數不完整，請確認看板連結是否正確（應包含 ?temple=...&session=...）。";
+    return;
+  }
+
+  try {
+    const objResult = await 呼叫後端API({
+      system: "現場報到",
+      action: "查詢場次公開資訊",
+      精舍代碼: str精舍代碼,
+      場次代碼: str場次代碼
+    });
+
+    if (!objResult.成功) {
+      document.getElementById("loadingNotice").textContent =
+        objResult.訊息 || "無法載入場次資訊。";
+      return;
+    }
+
+    document.getElementById("sessionNameShow").textContent = objResult.場次名稱;
+    document.getElementById("announcementShow").textContent = objResult.公告文字 || "";
+    if (objResult.狀態 !== "進行中") {
+      document.getElementById("endedBadge").style.display = "inline-block";
+    }
+
+    document.getElementById("loadingNotice").style.display = "none";
+    document.getElementById("mainContent").style.display = "block";
+
+    更新報到進度看板();
+    setInterval(更新報到進度看板, 5000);
+  } catch (錯誤) {
+    console.error("載入場次公開資訊時發生錯誤：", 錯誤);
+    document.getElementById("loadingNotice").textContent = "載入時發生未預期錯誤，請重新整理頁面再試一次。";
+  }
+}
+
+初始化頁面();
+</script>
+
+</body>
+</html>

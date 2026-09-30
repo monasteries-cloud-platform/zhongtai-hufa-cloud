@@ -239,6 +239,33 @@
     padding: 10px 0;
   }
 
+  /* 【2026-09-30 新增】各組報到進度：法師訪談決議，場次管理頁也要
+     能看到跟現場報到頁一樣的「依組別」統計，不用只看全場次總計 */
+  .btn-toggle-group {
+    background: none;
+    border: 1px solid #c7d0de;
+    color: #2E5395;
+    border-radius: 5px;
+    padding: 3px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-top: 6px;
+  }
+  .btn-toggle-group:hover { background: #eef2f8; }
+  .group-table-wrap { display: none; margin-top: 8px; }
+  .group-table-wrap.open { display: block; }
+  .group-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  .group-table th, .group-table td {
+    border: 1px solid #e0e0e0;
+    padding: 4px 8px;
+    text-align: left;
+  }
+  .group-table th { background: #f7f8fb; color: #555; }
+
   #loadingNotice {
     text-align: center;
     color: #666;
@@ -492,9 +519,17 @@ async function 處理刪除場次按鈕點擊(str場次代碼) {
 /**
  * ------------------------------------------------------------
  * 函式：組出場次清單表格HTML
- * 版本：v1.0（2026-09-16）
+ * 版本：v1.1（2026-09-30，法師訪談決議：新增「顯示各組進度」）
+ * 版本歷程：
+ *   v1.0（2026-09-16）初版，只顯示全場次總計進度。
  * 用途：把後端回傳的場次清單資料，轉成表格形式的 HTML 字串。
  *       獨立成一個函式方便閱讀與未來調整呈現方式。
+ * 變更說明（v1.1）：
+ *   每一列的「報到進度」欄位新增「顯示各組進度」按鈕，點擊後展開
+ *   / 收合一個小表格，列出後端新回傳的 依組別統計（組別／已報到／
+ *   總人數三欄，跟現場報到頁公開顯示的內容一致），方便資料組不用
+ *   離開後台就能看到各組報到狀況。用陣列索引（第幾個場次）當作
+ *   展開狀態的識別，因為場次代碼可能包含表格 id 不允許的字元。
  * 參數：
  *   arr場次清單 - 後端「查詢場次清單」API 回傳的場次陣列
  * 回傳：
@@ -510,7 +545,7 @@ function 組出場次清單表格HTML(arr場次清單) {
     "<th>場次代碼</th><th>場次名稱</th><th>建立時間</th><th>報到進度</th><th>操作</th>" +
     "</tr></thead><tbody>";
 
-  arr場次清單.forEach(function (obj場次) {
+  arr場次清單.forEach(function (obj場次, int索引) {
     // 避免總人數為0時除以0，先做防呆判斷
     var int百分比 = obj場次.總人數 > 0
       ? Math.round((obj場次.已報到人數 / obj場次.總人數) * 100)
@@ -523,6 +558,10 @@ function 組出場次清單表格HTML(arr場次清單) {
       "<td>" +
         obj場次.已報到人數 + " / " + obj場次.總人數 + "（" + int百分比 + "%）" +
         "<div class='progress-bar-bg'><div class='progress-bar-fill' style='width:" + int百分比 + "%'></div></div>" +
+        "<button type='button' class='btn-toggle-group' onclick=\"切換各組進度顯示(" + int索引 + ")\">顯示各組進度</button>" +
+        "<div class='group-table-wrap' id='groupTableWrap-" + int索引 + "'>" +
+          組出各組進度表格HTML(obj場次.依組別統計) +
+        "</div>" +
       "</td>" +
       "<td>" +
         "<button class='btn-download' onclick=\"處理下載出席名單按鈕點擊('" +
@@ -534,6 +573,75 @@ function 組出場次清單表格HTML(arr場次清單) {
 
   strHTML += "</tbody></table>";
   return strHTML;
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：組出各組進度表格HTML
+ * 版本：v1.1（2026-09-30，新增「報到率」欄位，法師詢問確認）
+ * 版本歷程：
+ *   v1.0（2026-09-30）初版，只有「組別／已報到／總人數」三欄。
+ * 用途：把後端回傳的「依組別統計」陣列，轉成小表格 HTML 字串，
+ *       欄位為「組別／已報到／總人數／報到率」四欄，供「組出場次
+ *       清單表格HTML」的展開區塊使用，也方便未來若有其他地方要
+ *       顯示同樣格式的各組進度時重複利用。報到率為前端計算
+ *       （已報到人數÷總人數），不需要後端額外回傳。
+ * 參數：
+ *   arr依組別統計 - 後端回傳的陣列，每筆為 { 組別, 已報到人數, 總人數 }
+ * 回傳：
+ *   str HTML 字串
+ * ------------------------------------------------------------
+ */
+function 組出各組進度表格HTML(arr依組別統計) {
+  if (!arr依組別統計 || arr依組別統計.length === 0) {
+    return "<div class='empty-hint'>本場次名單尚無組別資料。</div>";
+  }
+
+  var strHTML = "<table class='group-table'><thead><tr>" +
+    "<th>組別</th><th>已報到</th><th>總人數</th><th>報到率</th>" +
+    "</tr></thead><tbody>";
+
+  arr依組別統計.forEach(function (obj這一組) {
+    // 各組報到率：已報到人數 ÷ 總人數，前端計算即可，不需要後端
+    // 額外回傳百分比欄位（跟現場報到頁 checkin.html 同一套算法）
+    var int組百分比 = obj這一組.總人數 > 0
+      ? Math.round((obj這一組.已報到人數 / obj這一組.總人數) * 100)
+      : 0;
+    strHTML += "<tr>" +
+      "<td>" + 轉義HTML(obj這一組.組別) + "</td>" +
+      "<td>" + obj這一組.已報到人數 + "</td>" +
+      "<td>" + obj這一組.總人數 + "</td>" +
+      "<td>" + int組百分比 + "%</td>" +
+      "</tr>";
+  });
+
+  strHTML += "</tbody></table>";
+  return strHTML;
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：切換各組進度顯示
+ * 版本：v1.0（2026-09-30）
+ * 用途：點擊「顯示各組進度」按鈕時，展開或收合對應的各組進度
+ *       小表格，並同步切換按鈕文字，讓使用者清楚目前是展開還是
+ *       收合狀態。
+ * 參數：
+ *   int索引 - 該場次在目前畫面清單中的陣列索引（對應展開區塊的 id）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 切換各組進度顯示(int索引) {
+  var elWrap = document.getElementById("groupTableWrap-" + int索引);
+  if (!elWrap) return;
+
+  var elButton = elWrap.previousElementSibling;
+  var bool即將展開 = !elWrap.classList.contains("open");
+
+  elWrap.classList.toggle("open");
+  if (elButton && elButton.classList.contains("btn-toggle-group")) {
+    elButton.textContent = bool即將展開 ? "收合各組進度" : "顯示各組進度";
+  }
 }
 
 /**

@@ -12,7 +12,9 @@
   /*
    * ============================================================
    * 檔案：現場報到掃碼頁（模組4）
-   * 版本：v2.3（2026-09-20，新增相機掃描 QR Code 報到功能）
+   * 版本：v2.5（2026-09-30，法師訪談決議，比照舊版報到系統新增
+   *       「報到進度總覽」；本檔案自此正式定名為 checkin.html 上線，
+   *       不再使用「checkin-新版.html」這個過渡期檔名）
    * 說明：
    *   給活動現場使用的報到頁面，不需要精舍登入密碼
    *   （2026-09-16 訪談確認），精舍代碼與場次代碼由網址參數帶入，
@@ -81,6 +83,19 @@
    *   除錯時，也能看出鏡頭與掃描迴圈是否正常運作。原本的「輸入學員
    *   編號或姓名」查詢框保留在相機畫面下方，作為相機故障、光線不佳
    *   掃不到、或想用姓名查詢時的備用輸入方式。
+   * 變更說明（v2.5，2026-09-30 法師訪談確認，新增報到進度總覽）：
+   *   舊版報到系統（06-04-02 頒證/checkin.html）原本就有「報到進度
+   *   總覽」區塊（總計＋依組別的已報到／總人數表格），2026-09-16
+   *   套用視覺風格時決議先不做，這次法師確認要補回來，而且要跟
+   *   舊版一樣「公開顯示在現場報到頁上，不需要登入就能看到」。
+   *   實作方式：新增 #cardProgress 卡片，放在相機掃描卡片下方；
+   *   每 5 秒呼叫一次後端新增的 "查詢報到進度統計" action（詳見
+   *   報到系統_03_現場報到邏輯.gs），取得總計與依組別統計後，
+   *   重繪進度條與表格。這個 action 只回傳人數統計、不含姓名等
+   *   個資，維持現場報到頁一貫「不驗證身分但也不外洩名單內容」
+   *   的分寸（2026-09-16 訪談確認的公開頁面資訊揭露原則）。
+   *   各組進度表格新增「報到率」欄位（已報到人數÷總人數），純前端
+   *   計算，不需要後端額外回傳百分比欄位。
    * ============================================================
    */
   :root {
@@ -265,6 +280,45 @@
     padding-top: 16px;
     border-top: 1px dashed var(--color-card-border);
   }
+
+  /* 【v2.5 新增】報到進度總覽：比照舊版報到系統畫面，公開顯示
+     總計與依組別的報到人數，樣式沿用本頁既有的卡片與配色變數 */
+  #cardProgress h3 {
+    font-size: 15px;
+    margin: 0 0 10px 0;
+    color: var(--color-title);
+  }
+  .progress-total {
+    font-size: 15px;
+    color: var(--color-title);
+    margin-bottom: 8px;
+  }
+  .progress-bar-bg {
+    background: #E7E1D2;
+    border-radius: 6px;
+    width: 100%;
+    height: 10px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .progress-bar-fill {
+    background: var(--color-accent);
+    height: 100%;
+  }
+  .group-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  .group-table th, .group-table td {
+    border: 1px solid var(--color-card-border);
+    padding: 6px 8px;
+    text-align: left;
+  }
+  .group-table th {
+    background: #FBF9F4;
+    color: var(--color-subtitle);
+  }
 </style>
 </head>
 <body>
@@ -317,6 +371,19 @@
       <input type="text" id="inputStudentId" autocomplete="off" inputmode="text" placeholder="輸入後按 Enter 或送出">
       <button class="big-action" id="btnSearch" onclick="處理查詢按鈕點擊()">送出報到</button>
     </div>
+  </div>
+
+  <!-- 【v2.5 新增】報到進度總覽：比照舊版報到系統（06-04-02 頒證/
+       checkin.html）公開顯示總計與依組別的報到人數，不需要登入
+       就能看到，方便現場工作人員與大眾隨時掌握報到狀況 -->
+  <div class="card" id="cardProgress">
+    <h3>報到進度總覽</h3>
+    <div class="progress-total" id="progressTotalShow">尚無資料</div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div></div>
+    <table class="group-table">
+      <thead><tr><th>組別</th><th>已報到</th><th>總人數</th><th>報到率</th></tr></thead>
+      <tbody id="groupStatsBody"></tbody>
+    </table>
   </div>
 
 </div>
@@ -703,6 +770,66 @@ function 處理查詢按鈕點擊() {
 
 /**
  * ------------------------------------------------------------
+ * 函式：更新報到進度總覽
+ * 版本：v1.0（2026-09-30，比照舊版報到系統 checkin.html 的
+ *       「更新進度總覽」函式，沿用相同的呈現方式）
+ * 用途：呼叫後端新增的 "查詢報到進度統計" action，取得目前場次的
+ *       總計（已報到／總人數）與依組別統計，重繪進度條文字、進度
+ *       條寬度，以及依組別統計表格。由「初始化頁面」載入完成後
+ *       呼叫一次，並用 setInterval 每 5 秒自動刷新一次（跟舊版
+ *       報到系統相同的刷新頻率），讓現場工作人員不用手動重新整理
+ *       頁面就能看到最新進度。
+ *       查詢失敗（例如場次代碼有誤）時，只在畫面上顯示提示文字，
+ *       不會影響上方的報到／掃描功能繼續運作。
+ * 參數：無（直接從網址參數讀取精舍代碼、場次代碼）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+async function 更新報到進度總覽() {
+  try {
+    const objResult = await 呼叫後端API({
+      system: "現場報到",
+      action: "查詢報到進度統計",
+      精舍代碼: 取得網址參數("temple"),
+      場次代碼: 取得網址參數("session")
+    });
+
+    if (!objResult.成功) {
+      document.getElementById("progressTotalShow").textContent = objResult.訊息 || "尚無資料";
+      return;
+    }
+
+    const int百分比 = objResult.總人數 > 0
+      ? Math.round((objResult.已報到人數 / objResult.總人數) * 100)
+      : 0;
+
+    document.getElementById("progressTotalShow").textContent =
+      "已報到 " + objResult.已報到人數 + " / " + objResult.總人數 + " 人（" + int百分比 + "%）";
+    document.getElementById("progressBarFill").style.width = int百分比 + "%";
+
+    const elTbody = document.getElementById("groupStatsBody");
+    elTbody.innerHTML = "";
+    (objResult.依組別統計 || []).forEach(function (obj這一組) {
+      // 各組報到率：已報到人數 ÷ 總人數，不需要後端額外回傳，
+      // 前端跟「總計百分比」用同一套防呆算法（總人數為0時顯示0%）
+      const int組百分比 = obj這一組.總人數 > 0
+        ? Math.round((obj這一組.已報到人數 / obj這一組.總人數) * 100)
+        : 0;
+      const elTr = document.createElement("tr");
+      elTr.innerHTML = "<td></td><td></td><td></td><td></td>";
+      elTr.children[0].textContent = obj這一組.組別;
+      elTr.children[1].textContent = obj這一組.已報到人數;
+      elTr.children[2].textContent = obj這一組.總人數;
+      elTr.children[3].textContent = int組百分比 + "%";
+      elTbody.appendChild(elTr);
+    });
+  } catch (錯誤) {
+    console.error("更新報到進度總覽時發生錯誤：", 錯誤);
+  }
+}
+
+/**
+ * ------------------------------------------------------------
  * 函式：初始化頁面
  * 版本：v1.0（2026-09-16）
  * 用途：頁面載入時執行，檢查網址參數是否齊全，並呼叫「查詢場次
@@ -741,6 +868,12 @@ async function 初始化頁面() {
 
     document.getElementById("loadingNotice").style.display = "none";
     document.getElementById("mainContent").style.display = "block";
+
+    // 【v2.5 新增】報到進度總覽：不論場次是否已結束都要顯示（結束後
+    // 現場人員／大眾通常還是會想看最終統計），載入完成後先更新一次，
+    // 之後每 5 秒自動刷新，跟舊版報到系統相同的刷新頻率
+    更新報到進度總覽();
+    setInterval(更新報到進度總覽, 5000);
 
     if (objResult.狀態 !== "進行中") {
       document.getElementById("endedBadge").style.display = "inline-block";
