@@ -12,15 +12,20 @@
   /*
    * ============================================================
    * 檔案：現場報到掃碼頁（模組4）
-   * 版本：v2.7（2026-09-30，法師訪談決議：LOGO 改放系統名稱右側）
+   * 版本：v2.8（2026-09-30，法師確認：LOGO 位置修正為文字左側）
    * 版本歷程：
+   *   - v2.8（2026-09-30）：v2.7 上線後法師看畫面反映，「放在系統
+   *     名稱右側」原意是 LOGO 緊接在文字左邊、兩者靠在一起排成
+   *     「LOGO＋系統名稱」，不是把圖示推到整行最右端（v2.7 用
+   *     justify-content: space-between 把圖示推到卡片最右側，
+   *     跟文字中間留一大段空白，不是法師要的效果）。修正方式：
+   *     img 元素改排在 span 文字「前面」，並拿掉 space-between，
+   *     讓 LOGO 與文字自然靠在一起、整組靠左對齊。
    *   - v2.7（2026-09-30）：原本標題區是「大張完整版 LOGO（logo-full.jpg）
    *     置中放在系統名稱上方」，法師確認改成「縮小的精簡版 LOGO
-   *     （logo-icon.jpg）放在系統名稱同一行的右側」，比照三個操作
-   *     頁面（temple-admin.html 等）標題列已經使用小圖示的做法，
-   *     差別只在圖示放在文字右邊而不是左邊。h1 改用 flex 排版，
-   *     文字靠左、圖示靠右對齊；移除原本的 .logo-wrap 大圖區塊與
-   *     對應樣式。
+   *     （logo-icon.jpg）放在系統名稱同一行」，比照三個操作
+   *     頁面（temple-admin.html 等）標題列已經使用小圖示的做法。
+   *     h1 改用 flex 排版；移除原本的 .logo-wrap 大圖區塊與對應樣式。
    *   - v2.6（2026-09-30，法師實機測試反映，修正手動輸入時
    *     報到結果被手機鍵盤擋住／捲走的問題，詳見「送出報到」
    *     函式的 v1.2 版本說明）
@@ -142,13 +147,15 @@
     margin-bottom: 18px;
     border-bottom: 1px solid var(--color-card-border);
   }
-  /* 【2026-09-30 法師訪談決議調整】LOGO 縮小改放在系統名稱右側，
-     不再用大圖置中放在標題上方（原本的 .logo-wrap 大圖作法）；
-     系統名稱與小圖示排成同一行，圖示靠右對齊 */
+  /* 【2026-09-30 法師訪談決議調整】LOGO 縮小改放在系統名稱同一行，
+     不再用大圖置中放在標題上方（原本的 .logo-wrap 大圖作法）。
+     法師確認：LOGO 要緊接在文字「左邊」、兩者靠在一起（LOGO＋
+     系統名稱），不是把 LOGO 推到整行最右側，所以改成 img 排在
+     span 前面、justify-content 改回預設（靠左），不使用
+     space-between。 */
   .header-card h1 {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
     font-size: 21px;
     margin: 0 0 6px 0;
@@ -343,7 +350,7 @@
 <div class="wrap" id="mainContent" style="display:none;">
 
   <div class="header-card">
-    <h1><span>護法會頒證出席報到系統</span><img class="title-logo-icon" src="logo-icon.jpg" alt="護法會雲端系統"></h1>
+    <h1><img class="title-logo-icon" src="logo-icon.jpg" alt="護法會雲端系統"><span>護法會頒證出席報到系統</span></h1>
     <div class="session-line">目前報到場次：<span id="sessionNameShow"></span></div>
     <div class="announcement" id="announcementShow"></div>
     <div id="endedBadge" style="display:none;" class="status-ended">本場次報到已結束</div>
