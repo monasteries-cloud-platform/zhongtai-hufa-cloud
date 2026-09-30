@@ -8,8 +8,26 @@
   /*
    * ============================================================
    * 檔案：現場報到人數看板（大螢幕顯示用，模組4附屬頁面）
-   * 版本：v1.3（2026-09-30，法師訪談決議改成索引輪播＋連續捲動）
+   * 版本：v1.5（2026-09-30，法師訪談決議：一鍵全螢幕＋圓餅圖放到最大）
    * 版本歷程：
+   *   v1.5（2026-09-30）：
+   *     (1) 頁首新增「進入全螢幕」按鈕：瀏覽器基於安全考量，不允許
+   *         網頁在沒有任何人點擊的情況下自動進入全螢幕，改成現場
+   *         人員開啟看板後點一下按鈕即可進入全螢幕，點擊後按鈕自動
+   *         隱藏（見 JS「進入全螢幕」）。
+   *     (2) 圓餅圖大小改成用 JS 依輪播實際可用高度、寬度動態計算
+   *         （CSS 變數 --pie-size），盡量放到最大，百分比文字、
+   *         圓環厚度等比例跟著縮放（見 JS「設定輪播高度」）。
+   *   v1.4（2026-09-30）：
+   *     (1) 版面改成自動偵測、撐滿畫面可顯示高度：body 固定為視窗
+   *         高度（100vh），「報到進度總覽」輪播與「最近報到」清單
+   *         的可視高度都改用 flex 自動撐滿剩餘空間（不再寫死
+   *         260px／640px），並在視窗大小改變（resize）時重新量測
+   *         調整，見 JS「設定輪播高度」。
+   *     (2) 現場反映坐在後排看不清楚文字，全面放大文字：圓餅圖
+   *         （200px→260px）、百分比文字、已報到人數、各組統計表、
+   *         最近報到名單的姓名／組別／時間都放大約 30～50%，頁首
+   *         標題也一併加大。
    *   v1.3（2026-09-30）：
    *     (1)「報到進度總覽」改成索引輪播：固定同一個頁面、不換網址，
    *         在卡片內部用「往上滾動」的位移動畫，於「圓餅圖」與
@@ -69,13 +87,31 @@
     --color-success: #3F6B2E;
   }
   * { box-sizing: border-box; }
+  /* 【2026-09-30 法師訪談決議新增】版面改成自動偵測畫面可顯示高度：
+     body 固定為視窗高度（100vh），不管螢幕／視窗多高多矮，頁首之外
+     的內容區塊都用 flex／grid 自動撐滿剩餘高度，「報到進度總覽」
+     輪播與「最近報到」清單的可視高度也跟著自動調整（見下方
+     .layout、.panel、.progress-carousel、.recent-list-wrap），
+     不會因為視窗較矮就被截斷看不到，也不會在視窗較高時留下大片
+     空白。萬一內容真的裝不下（例如視窗窄到跳成單欄），允許捲動
+     （overflow-y: auto）作為保險，不會整段消失。 */
+  html, body { height: 100%; }
   body {
     font-family: "微軟正黑體", "PMingLiU", sans-serif;
     background: var(--color-bg);
     color: var(--color-title);
     margin: 0;
     padding: 28px 40px;
-    min-height: 100vh;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  #mainContent {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
   #loadingNotice {
     text-align: center;
@@ -88,6 +124,7 @@
     align-items: center;
     gap: 18px;
     margin-bottom: 22px;
+    flex-shrink: 0;
   }
   .header img {
     height: 64px;
@@ -95,17 +132,17 @@
   }
   .header .titles h1 {
     margin: 0;
-    font-size: 30px;
+    font-size: 34px;
     color: var(--color-title);
   }
   .header .titles .session-line {
     margin-top: 4px;
-    font-size: 18px;
+    font-size: 20px;
     color: var(--color-subtitle);
   }
   .header .titles .announcement {
     margin-top: 2px;
-    font-size: 15px;
+    font-size: 17px;
     color: var(--color-subtitle);
   }
   .status-ended {
@@ -116,10 +153,31 @@
     border-radius: 20px;
     font-size: 16px;
   }
+  /* 【2026-09-30 法師訪談決議新增】瀏覽器基於安全考量，不允許網頁
+     在沒有任何人點擊的情況下自動進入全螢幕；改成放一個小按鈕，
+     現場人員開啟看板後點一下即可進入全螢幕，點擊後按鈕自動隱藏、
+     不會一直擋在畫面上，見 JS「進入全螢幕」。 */
+  .btn-fullscreen {
+    margin-left: auto;
+    background: var(--color-panel-bg);
+    border: 1px solid var(--color-panel-border);
+    color: var(--color-subtitle);
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 15px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .btn-fullscreen:hover {
+    background: var(--color-accent-bar-bg);
+    color: var(--color-title);
+  }
 
   /* 【2026-09-30 法師訪談決議調整】版面比例改成左邊「報到進度總覽」
      佔 2/3、右邊「最近報到」佔 1/3（原本是 1.3:1，比較接近對半） */
   .layout {
+    flex: 1;
+    min-height: 0;
     display: grid;
     grid-template-columns: 2fr 1fr;
     gap: 24px;
@@ -133,28 +191,26 @@
     border: 1px solid var(--color-panel-border);
     border-radius: 16px;
     padding: 24px 28px;
+    /* 【2026-09-30 法師訪談決議調整】改用 flex column＋min-height:0，
+       讓卡片內容（輪播／最近報到清單）能撐滿格線分配到的高度，
+       高度隨畫面可顯示高度自動調整，不再用固定像素或置中留白處理。 */
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
   .panel h2 {
     margin: 0 0 16px 0;
-    font-size: 20px;
+    font-size: 22px;
     color: var(--color-subtitle);
     font-weight: normal;
     letter-spacing: 1px;
-  }
-  /* 【2026-09-30 法師訪談決議調整】報到進度總覽卡片內容固定高度
-     （輪播 260px＋指示點），但因為跟右邊最近報到面板同一列，格線
-     版面（.layout 用 grid）預設會把兩個 .panel 拉成一樣高，導致
-     卡片內容下方留下一大塊空白；改用 flex 讓 .progress-body 在
-     多出來的高度中垂直置中，畫面比較平衡。 */
-  .panel-progress {
-    display: flex;
-    flex-direction: column;
+    flex-shrink: 0;
   }
   .progress-body {
     flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    justify-content: center;
   }
 
   /* 【v1.1 新增】總計進度改用圓餅圖（甜甜圈圖）呈現，比大數字＋
@@ -165,14 +221,20 @@
   .total-row {
     display: flex;
     align-items: center;
-    gap: 32px;
-    margin-bottom: 16px;
+    justify-content: center;
+    gap: 48px;
     flex-wrap: wrap;
   }
+  /* 【2026-09-30 法師訪談決議調整：圓餅圖盡量呈現最大】圓餅圖大小
+     改成用 CSS 變數 --pie-size 控制，由 JS「設定輪播高度」依實際
+     量測到的輪播可用高度（跟寬度）動態計算，盡量把圓餅圖放到最大，
+     不再寫死固定像素；百分比文字、圓環厚度也跟著等比例縮放，
+     圖再大字也不會不成比例地小。--pie-size 預設 260px 是還沒量測
+     完成前（例如載入瞬間）的保底值。 */
   .pie-chart {
     position: relative;
-    width: 200px;
-    height: 200px;
+    width: var(--pie-size, 260px);
+    height: var(--pie-size, 260px);
     border-radius: 50%;
     flex-shrink: 0;
     background: conic-gradient(var(--color-accent-bar-bg) 0% 100%);
@@ -180,7 +242,7 @@
   .pie-chart::before {
     content: "";
     position: absolute;
-    inset: 20px;
+    inset: calc(var(--pie-size, 260px) * 0.1);
     background: var(--color-panel-bg);
     border-radius: 50%;
   }
@@ -193,18 +255,18 @@
     justify-content: center;
   }
   .pie-percent {
-    font-size: 44px;
+    font-size: calc(var(--pie-size, 260px) * 0.27);
     font-weight: bold;
     color: var(--color-accent);
     line-height: 1;
   }
   .pie-label {
-    font-size: 13px;
+    font-size: calc(var(--pie-size, 260px) * 0.077);
     color: var(--color-subtitle);
-    margin-top: 4px;
+    margin-top: 6px;
   }
   .total-count {
-    font-size: 24px;
+    font-size: 38px;
     color: var(--color-title);
     font-weight: bold;
   }
@@ -214,9 +276,15 @@
      裡面放兩張「頁面」（.progress-slide）：第一頁圓餅圖、第二頁
      各組報到統計表，每隔一段時間用「往上滾動」的位移動畫換到下
      一頁，並在下方用小圓點（.carousel-dots）標示目前在第幾頁。 */
+  /* 【2026-09-30 法師訪談決議調整】輪播高度改成自動撐滿 .progress-body
+     剩餘空間（flex:1），不再寫死 260px；實際高度改由 JS 量測
+     .progress-carousel 目前渲染出來的高度，再設定給每張投影片
+     （.progress-slide），畫面自動隨螢幕／視窗可顯示高度調整，
+     見 JS「設定輪播高度」。 */
   .progress-carousel {
     position: relative;
-    height: 260px;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
   }
   .progress-track {
@@ -227,10 +295,10 @@
     transition: transform 0.6s ease;
   }
   .progress-slide {
-    height: 260px;
     box-sizing: border-box;
     display: flex;
     align-items: center;
+    justify-content: center;
   }
   .progress-slide.slide-table {
     align-items: stretch;
@@ -243,10 +311,10 @@
      報到率）固定不跟著捲動。 */
   .group-table-header {
     display: flex;
-    padding: 0 4px 10px 4px;
+    padding: 0 8px 12px 8px;
     border-bottom: 1px solid var(--color-panel-border);
     color: var(--color-subtitle);
-    font-size: 15px;
+    font-size: 20px;
     flex-shrink: 0;
   }
   .group-table-header > div {
@@ -262,9 +330,10 @@
   }
   .group-row {
     display: flex;
-    padding: 10px 4px;
+    align-items: center;
+    padding: 14px 8px;
     border-bottom: 1px solid var(--color-panel-border);
-    font-size: 18px;
+    font-size: 28px;
     flex-shrink: 0;
   }
   .group-row > div {
@@ -277,12 +346,13 @@
   .carousel-dots {
     display: flex;
     justify-content: center;
-    gap: 8px;
+    gap: 10px;
     margin-top: 14px;
+    flex-shrink: 0;
   }
   .carousel-dots .dot {
-    width: 9px;
-    height: 9px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: var(--color-accent-bar-bg);
     transition: background 0.3s ease;
@@ -299,14 +369,17 @@
      視覺上剛好無縫接上複製的第二份，達成不間斷捲動的效果，細節
      見 JS「重繪最近報到名單」。項目不多、清單容器裝得下時則不
      捲動，直接靜態顯示即可。 */
+  /* 【2026-09-30 法師訪談決議調整】高度改用 flex:1 撐滿面板剩餘
+     空間（隨畫面可顯示高度自動調整），不再寫死 640px */
   .recent-list-wrap {
-    max-height: 640px;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
   }
   .recent-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
   .recent-item {
     /* 【2026-09-30 法師訪談決議調整】改成上下兩行：
@@ -320,8 +393,10 @@
     background: var(--color-accent-bar-bg);
     border: 1px solid var(--color-panel-border);
     border-radius: 10px;
-    padding: 12px 16px;
-    font-size: 19px;
+    padding: 14px 18px;
+    /* 【2026-09-30 法師訪談決議調整：現場後排看不清楚】文字整體
+       放大，方便活動現場較遠距離觀看 */
+    font-size: 28px;
     animation: fadeIn 0.5s ease;
   }
   .recent-item .name {
@@ -330,18 +405,18 @@
   }
   .recent-item .group {
     color: var(--color-subtitle);
-    font-size: 15px;
-    margin-left: 8px;
+    font-size: 22px;
+    margin-left: 10px;
   }
   .recent-item .time {
     color: var(--color-success);
-    font-size: 15px;
+    font-size: 22px;
     white-space: nowrap;
-    margin-top: 4px;
+    margin-top: 6px;
   }
   .empty-hint {
     color: var(--color-subtitle);
-    font-size: 16px;
+    font-size: 20px;
     padding: 10px 0;
   }
   @keyframes fadeIn {
@@ -368,6 +443,9 @@
       <div class="announcement" id="announcementShow"></div>
     </div>
     <div id="endedBadge" class="status-ended" style="display:none;">本場次報到已結束</div>
+    <button id="btnFullscreen" class="btn-fullscreen" onclick="進入全螢幕()" type="button">
+      進入全螢幕
+    </button>
   </div>
 
   <div class="layout">
@@ -706,6 +784,52 @@ function 切換報到進度頁面(intIndex) {
 
 /**
  * ------------------------------------------------------------
+ * 函式：設定輪播高度
+ * 版本：v1.1（2026-09-30，法師訪談決議：圓餅圖盡量呈現最大）
+ * 版本歷程：
+ *   v1.1（2026-09-30）：新增計算圓餅圖大小（--pie-size CSS 變數），
+ *     以輪播實際可用高度、寬度為基準，盡量把圓餅圖放到最大（受
+ *     .total-row 裡「已報到 X/Y 人」文字需要的寬度限制），百分比
+ *     文字、圓環厚度用 CSS calc() 跟著等比例縮放，見 .pie-chart
+ *     系列的 CSS 規則。
+ *   v1.0（2026-09-30）：初版，只處理輪播投影片高度。
+ * 用途：「報到進度總覽」輪播（.progress-carousel）改用 CSS flex
+ *       自動撐滿畫面可顯示的剩餘高度，不再寫死像素；但輪播裡的
+ *       兩張投影片（.progress-slide）需要一個明確的像素高度才能
+ *       疊放、用 translateY 位移切換，所以這裡用 JS 量測
+ *       .progress-carousel 實際渲染出來的高度，設定給每張投影片，
+ *       並重新套用目前頁數的位移（避免高度改變後位置跑掉）；同時
+ *       依可用高度、寬度計算圓餅圖應該多大，盡量佔滿版面。
+ *       在頁面初始化、以及視窗大小改變（resize，例如換螢幕、換
+ *       投影機解析度）時都會呼叫，讓畫面自動隨螢幕高度調整。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 設定輪播高度() {
+  const elCarousel = document.getElementById("progressCarousel");
+  const num高度 = elCarousel.clientHeight;
+  if (num高度 <= 0) return; // 尚未完成版面排版（例如畫面還在載入中），先略過
+
+  document.querySelectorAll("#progressTrack .progress-slide").forEach(function (elSlide) {
+    elSlide.style.height = num高度 + "px";
+  });
+
+  // 圓餅圖盡量放到最大：高度上限用輪播可用高度的九成（留一點上下邊距）；
+  // 寬度上限用輪播可用寬度的一半（另一半要留給旁邊「已報到 X/Y 人」文字
+  // 跟兩者之間的間距），兩者取較小值，並設一個最小值避免資料還沒載入時
+  // 太小、一個最大值避免螢幕極高時圓餅圖大到不成比例。
+  const num可用寬度 = elCarousel.clientWidth;
+  const num高度上限 = num高度 * 0.9;
+  const num寬度上限 = num可用寬度 * 0.5;
+  const num圓餅圖大小 = Math.max(200, Math.min(num高度上限, num寬度上限, 640));
+  document.documentElement.style.setProperty("--pie-size", num圓餅圖大小 + "px");
+
+  切換報到進度頁面(int報到進度目前頁數); // 高度可能改變，重新套用目前頁數的位移確保對齊
+}
+
+/**
+ * ------------------------------------------------------------
  * 函式：啟動報到進度輪播
  * 版本：v1.0（2026-09-30，法師訪談決議：每 3 分鐘自動切換一次）
  * 用途：每隔固定時間，把「報到進度總覽」在圓餅圖／各組報到統計表
@@ -765,7 +889,10 @@ async function 初始化頁面() {
     }
 
     document.getElementById("loadingNotice").style.display = "none";
-    document.getElementById("mainContent").style.display = "block";
+    document.getElementById("mainContent").style.display = "flex";
+
+    設定輪播高度();
+    window.addEventListener("resize", 設定輪播高度);
 
     更新報到進度看板();
     setInterval(更新報到進度看板, 5000);
@@ -775,6 +902,41 @@ async function 初始化頁面() {
     document.getElementById("loadingNotice").textContent = "載入時發生未預期錯誤，請重新整理頁面再試一次。";
   }
 }
+
+/**
+ * ------------------------------------------------------------
+ * 函式：進入全螢幕
+ * 版本：v1.0（2026-09-30，法師訪談決議：開啟後使用全螢幕）
+ * 用途：瀏覽器基於安全考量，不允許網頁在沒有任何人點擊的情況下
+ *       自動進入全螢幕，所以改成現場人員開啟看板後點一下畫面
+ *       右上角的「進入全螢幕」按鈕，呼叫瀏覽器原生的全螢幕
+ *       API（Fullscreen API），點擊後按鈕自動隱藏；如果使用者之後
+ *       自行按 Esc 或其他方式離開全螢幕，按鈕會重新顯示，方便
+ *       再次點擊恢復全螢幕。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 進入全螢幕() {
+  const el = document.documentElement;
+  const p = el.requestFullscreen
+    ? el.requestFullscreen()
+    : (el.webkitRequestFullscreen ? el.webkitRequestFullscreen() : null); // 相容較舊的 Safari／webkit 瀏覽器
+
+  if (p && typeof p.catch === "function") {
+    p.catch(function (錯誤) {
+      console.error("進入全螢幕失敗：", 錯誤);
+    });
+  }
+}
+
+document.addEventListener("fullscreenchange", function () {
+  const elBtn = document.getElementById("btnFullscreen");
+  elBtn.style.display = document.fullscreenElement ? "none" : "inline-block";
+  if (!document.fullscreenElement) {
+    設定輪播高度(); // 離開全螢幕後畫面尺寸改變，重新量測調整
+  }
+});
 
 初始化頁面();
 </script>
