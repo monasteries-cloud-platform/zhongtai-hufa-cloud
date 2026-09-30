@@ -8,8 +8,19 @@
   /*
    * ============================================================
    * 檔案：現場報到人數看板（大螢幕顯示用，模組4附屬頁面）
-   * 版本：v1.2（2026-09-30，法師訪談決議微調版面比例與最近報到排版）
+   * 版本：v1.3（2026-09-30，法師訪談決議改成索引輪播＋連續捲動）
    * 版本歷程：
+   *   v1.3（2026-09-30）：
+   *     (1)「報到進度總覽」改成索引輪播：固定同一個頁面、不換網址，
+   *         在卡片內部用「往上滾動」的位移動畫，於「圓餅圖」與
+   *         「各組報到統計表」兩頁之間每 3 分鐘自動切換一次，並在
+   *         下方顯示頁面指示點（●表示目前頁）。
+   *     (2)「最近報到」改成連續向上捲動的跑馬燈效果（項目較多、
+   *         清單容器裝不下時才捲動），取代原本每 5 秒整批重繪、
+   *         靜態列出的方式，畫面看起來更像跑馬燈持續滾動更新。
+   *     (3) 各組報到統計表也改成表頭固定、內容連續向上捲動（做法
+   *         跟「最近報到」一致），組別數量較多、切到第二頁時裝不下
+   *         的部分會自動捲動輪流呈現，不會被截斷看不到。
    *   v1.2（2026-09-30）：
    *     (1) 版面比例調整：左邊「報到進度總覽」與右邊「最近報到」
    *         欄寬比例由 1.3:1 改成 2:1，報到進度區塊佔畫面約 2/3，
@@ -130,6 +141,21 @@
     font-weight: normal;
     letter-spacing: 1px;
   }
+  /* 【2026-09-30 法師訪談決議調整】報到進度總覽卡片內容固定高度
+     （輪播 260px＋指示點），但因為跟右邊最近報到面板同一列，格線
+     版面（.layout 用 grid）預設會把兩個 .panel 拉成一樣高，導致
+     卡片內容下方留下一大塊空白；改用 flex 讓 .progress-body 在
+     多出來的高度中垂直置中，畫面比較平衡。 */
+  .panel-progress {
+    display: flex;
+    flex-direction: column;
+  }
+  .progress-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
 
   /* 【v1.1 新增】總計進度改用圓餅圖（甜甜圈圖）呈現，比大數字＋
      長條進度條更適合遠距離觀看，一眼就能看出報到比例。用純 CSS
@@ -183,30 +209,104 @@
     font-weight: bold;
   }
 
-  table.group-table {
+  /* 【2026-09-30 法師訪談決議新增】報到進度總覽改成「索引輪播」：
+     維持單一頁面、不換網址，固定高度的視窗（.progress-carousel）
+     裡面放兩張「頁面」（.progress-slide）：第一頁圓餅圖、第二頁
+     各組報到統計表，每隔一段時間用「往上滾動」的位移動畫換到下
+     一頁，並在下方用小圓點（.carousel-dots）標示目前在第幾頁。 */
+  .progress-carousel {
+    position: relative;
+    height: 260px;
+    overflow: hidden;
+  }
+  .progress-track {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
-    border-collapse: collapse;
-    font-size: 18px;
+    transition: transform 0.6s ease;
   }
-  table.group-table th, table.group-table td {
-    padding: 10px 12px;
-    text-align: left;
+  .progress-slide {
+    height: 260px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+  }
+  .progress-slide.slide-table {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  /* 【2026-09-30 法師訪談決議新增】各組報到統計改成「表頭固定、
+     內容連續向上捲動」：組別數量較多、260px 高度裝不下時，內容
+     會自動往上捲動輪流呈現，做法跟「最近報到」的跑馬燈一致（見
+     JS「重繪各組統計表格」），表頭（組別／已報到／總人數／
+     報到率）固定不跟著捲動。 */
+  .group-table-header {
+    display: flex;
+    padding: 0 4px 10px 4px;
     border-bottom: 1px solid var(--color-panel-border);
-  }
-  table.group-table th {
     color: var(--color-subtitle);
-    font-weight: normal;
     font-size: 15px;
+    flex-shrink: 0;
   }
-  table.group-table td.rate { color: var(--color-accent); font-weight: bold; }
+  .group-table-header > div {
+    flex: 1;
+  }
+  .group-scroll-wrap {
+    flex: 1;
+    overflow: hidden;
+  }
+  .group-scroll {
+    display: flex;
+    flex-direction: column;
+  }
+  .group-row {
+    display: flex;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--color-panel-border);
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .group-row > div {
+    flex: 1;
+  }
+  .group-row .rate {
+    color: var(--color-accent);
+    font-weight: bold;
+  }
+  .carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .carousel-dots .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--color-accent-bar-bg);
+    transition: background 0.3s ease;
+  }
+  .carousel-dots .dot.active {
+    background: var(--color-accent);
+  }
 
-  /* 最近報到名單：新的一筆從上方帶入，維持「滾動更新」的感覺 */
+
+  /* 【2026-09-30 法師訪談決議調整】最近報到名單改成「連續向上捲動」
+     的跑馬燈效果：外層 .recent-list-wrap 固定高度、裁掉超出範圍的
+     內容；內層 .recent-list 把名單複製一份接在後面，用 CSS
+     animation 讓內容持續往上位移，捲到一半（第一份名單捲完）時
+     視覺上剛好無縫接上複製的第二份，達成不間斷捲動的效果，細節
+     見 JS「重繪最近報到名單」。項目不多、清單容器裝得下時則不
+     捲動，直接靜態顯示即可。 */
+  .recent-list-wrap {
+    max-height: 640px;
+    overflow: hidden;
+  }
   .recent-list {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: 640px;
-    overflow: hidden;
   }
   .recent-item {
     /* 【2026-09-30 法師訪談決議調整】改成上下兩行：
@@ -248,6 +348,10 @@
     from { opacity: 0; transform: translateY(-6px); }
     to { opacity: 1; transform: translateY(0); }
   }
+  @keyframes scrollUp {
+    from { transform: translateY(0); }
+    to { transform: translateY(-50%); }
+  }
 </style>
 </head>
 <body>
@@ -267,28 +371,45 @@
   </div>
 
   <div class="layout">
-    <div class="panel">
+    <div class="panel panel-progress">
       <h2>報到進度總覽</h2>
-      <div class="total-row">
-        <div class="pie-chart" id="pieChart">
-          <div class="pie-center">
-            <div class="pie-percent" id="totalPercentShow">0%</div>
-            <div class="pie-label">已報到</div>
+      <div class="progress-body">
+        <div class="progress-carousel" id="progressCarousel">
+          <div class="progress-track" id="progressTrack">
+            <div class="progress-slide">
+              <div class="total-row">
+                <div class="pie-chart" id="pieChart">
+                  <div class="pie-center">
+                    <div class="pie-percent" id="totalPercentShow">0%</div>
+                    <div class="pie-label">已報到</div>
+                  </div>
+                </div>
+                <div class="total-count" id="totalCountShow">已報到 0 / 0 人</div>
+              </div>
+            </div>
+            <div class="progress-slide slide-table">
+              <div class="group-table-header">
+                <div>組別</div><div>已報到</div><div>總人數</div><div>報到率</div>
+              </div>
+              <div class="group-scroll-wrap" id="groupScrollWrap">
+                <div class="group-scroll" id="groupScroll"></div>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="total-count" id="totalCountShow">已報到 0 / 0 人</div>
+        <div class="carousel-dots" id="progressDots">
+          <span class="dot active"></span>
+          <span class="dot"></span>
+        </div>
       </div>
-
-      <table class="group-table">
-        <thead><tr><th>組別</th><th>已報到</th><th>總人數</th><th>報到率</th></tr></thead>
-        <tbody id="groupStatsBody"></tbody>
-      </table>
     </div>
 
     <div class="panel">
       <h2>最近報到</h2>
-      <div class="recent-list" id="recentList">
-        <div class="empty-hint">尚無報到紀錄</div>
+      <div class="recent-list-wrap" id="recentListWrap">
+        <div class="recent-list" id="recentList">
+          <div class="empty-hint">尚無報到紀錄</div>
+        </div>
       </div>
     </div>
   </div>
@@ -366,10 +487,50 @@ async function 更新報到進度看板() {
 }
 
 /**
+ * 全域變數：str上次各組統計內容Key
+ * 用途：跟「最近報到」一樣的做法，內容沒變就不重建、不重啟捲動
+ *       動畫，避免每 5 秒刷新打斷捲動的連續感。
+ */
+let str上次各組統計內容Key = "";
+
+/**
+ * ------------------------------------------------------------
+ * 函式：組出各組統計一列元素
+ * 版本：v1.0（2026-09-30）
+ * 用途：把單一組的統計資料組成 .group-row 的 DOM 元素，抽成獨立
+ *       函式是因為「連續向上捲動」需要把同一份清單畫兩次（原始＋
+ *       複製一份接在後面）。
+ * 參數：
+ *   obj這一組 - { 組別, 已報到人數, 總人數 }
+ * 回傳：DOM 元素（.group-row）
+ * ------------------------------------------------------------
+ */
+function 組出各組統計一列元素(obj這一組) {
+  const int組百分比 = obj這一組.總人數 > 0
+    ? Math.round((obj這一組.已報到人數 / obj這一組.總人數) * 100)
+    : 0;
+  const elRow = document.createElement("div");
+  elRow.className = "group-row";
+  elRow.innerHTML = "<div></div><div></div><div></div><div class='rate'></div>";
+  elRow.children[0].textContent = obj這一組.組別;
+  elRow.children[1].textContent = obj這一組.已報到人數;
+  elRow.children[2].textContent = obj這一組.總人數;
+  elRow.children[3].textContent = int組百分比 + "%";
+  return elRow;
+}
+
+/**
  * ------------------------------------------------------------
  * 函式：重繪各組統計表格
- * 版本：v1.0（2026-09-30）
- * 用途：把「依組別統計」陣列畫成表格列，並計算各組報到率
+ * 版本：v1.1（2026-09-30，改成表頭固定＋內容連續向上捲動）
+ * 版本歷程：
+ *   v1.1（2026-09-30）：組別較多、260px 高度裝不下時，內容改成
+ *     跟「最近報到」一樣的連續向上捲動跑馬燈效果（複製一份接在
+ *     後面、CSS animation 無縫循環），表頭固定不跟著捲動；內容
+ *     沒變化時不重建、不重啟動畫，維持捲動連續不中斷。組別不多
+ *     時維持靜態顯示，不需要捲動。
+ *   v1.0（2026-09-30）：初版，用 HTML table 靜態列出。
+ * 用途：把「依組別統計」陣列畫成清單，並計算各組報到率
  *       （已報到人數÷總人數，前端計算，不需要後端額外回傳）。
  * 參數：
  *   arr依組別統計 - { 組別, 已報到人數, 總人數 } 物件陣列
@@ -377,30 +538,94 @@ async function 更新報到進度看板() {
  * ------------------------------------------------------------
  */
 function 重繪各組統計表格(arr依組別統計) {
-  const elTbody = document.getElementById("groupStatsBody");
-  elTbody.innerHTML = "";
+  const elScroll = document.getElementById("groupScroll");
 
+  if (!arr依組別統計 || arr依組別統計.length === 0) {
+    elScroll.style.animation = "none";
+    elScroll.innerHTML = "";
+    str上次各組統計內容Key = "";
+    return;
+  }
+
+  const str這次內容Key = arr依組別統計
+    .map(function (o) { return o.組別 + "," + o.已報到人數 + "," + o.總人數; })
+    .join("|");
+  if (str這次內容Key === str上次各組統計內容Key) {
+    return;
+  }
+  str上次各組統計內容Key = str這次內容Key;
+
+  elScroll.style.animation = "none";
+  elScroll.innerHTML = "";
   arr依組別統計.forEach(function (obj這一組) {
-    const int組百分比 = obj這一組.總人數 > 0
-      ? Math.round((obj這一組.已報到人數 / obj這一組.總人數) * 100)
-      : 0;
-    const elTr = document.createElement("tr");
-    elTr.innerHTML = "<td></td><td></td><td></td><td class='rate'></td>";
-    elTr.children[0].textContent = obj這一組.組別;
-    elTr.children[1].textContent = obj這一組.已報到人數;
-    elTr.children[2].textContent = obj這一組.總人數;
-    elTr.children[3].textContent = int組百分比 + "%";
-    elTbody.appendChild(elTr);
+    elScroll.appendChild(組出各組統計一列元素(obj這一組));
   });
+
+  // 組別數量門檻：清單容器裝得下就不用捲動，直接靜態顯示即可
+  const bool需要捲動 = arr依組別統計.length > 4;
+  if (bool需要捲動) {
+    arr依組別統計.forEach(function (obj這一組) {
+      elScroll.appendChild(組出各組統計一列元素(obj這一組));
+    });
+
+    void elScroll.offsetHeight; // 強制重新計算版面，確保動畫從頭開始播放
+
+    const int捲動速度PxPerSec = 24; // 各組統計文字較少，捲動速度稍慢一點方便閱讀
+    const num一份高度 = elScroll.scrollHeight / 2;
+    const num動畫秒數 = num一份高度 / int捲動速度PxPerSec;
+    elScroll.style.animation = "scrollUp " + num動畫秒數 + "s linear infinite";
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 全域變數：str上次最近報到內容Key
+ * 用途：記住上一次「重繪最近報到名單」畫出來的內容，內容沒變就
+ *       不重建清單、不重啟捲動動畫，避免每 5 秒刷新時畫面被打斷
+ *       重跳一次，讓連續捲動看起來真的是「連續」的。
+ * ------------------------------------------------------------
+ */
+let str上次最近報到內容Key = "";
+
+/**
+ * ------------------------------------------------------------
+ * 函式：組出最近報到一筆的畫面元素
+ * 版本：v1.0（2026-09-30）
+ * 用途：把單一筆「最近報到」資料組成 .recent-item 的 DOM 元素，
+ *       抽成獨立函式是因為「連續向上捲動」需要把同一份名單畫
+ *       兩次（原始＋複製一份接在後面），避免重複寫兩次組字邏輯。
+ * 參數：
+ *   obj一筆 - { 姓名, 法名, 組別, 報到時間 }
+ * 回傳：DOM 元素（.recent-item）
+ * ------------------------------------------------------------
+ */
+function 組出最近報到一筆元素(obj一筆) {
+  const elItem = document.createElement("div");
+  elItem.className = "recent-item";
+  const str姓名法名 = obj一筆.姓名 + (obj一筆.法名 ? "（" + obj一筆.法名 + "）" : "");
+  elItem.innerHTML =
+    "<span class='line1'><span class='name'></span><span class='group'></span></span>" +
+    "<span class='time'></span>";
+  elItem.querySelector(".name").textContent = str姓名法名;
+  elItem.querySelector(".group").textContent = obj一筆.組別 || "";
+  elItem.querySelector(".time").textContent = obj一筆.報到時間 || "";
+  return elItem;
 }
 
 /**
  * ------------------------------------------------------------
  * 函式：重繪最近報到名單
- * 版本：v1.0（2026-09-30）
+ * 版本：v1.1（2026-09-30，改成連續向上捲動的跑馬燈效果）
+ * 版本歷程：
+ *   v1.1（2026-09-30）：原本每次刷新都整份重繪、靜態列出；改成
+ *     把名單複製一份接在後面，用 CSS animation 讓內容持續往上
+ *     位移，捲完第一份剛好無縫接上複製的第二份，達成不間斷捲動。
+ *     項目不多（清單容器裝得下）時不需要捲動，維持靜態顯示。
+ *     另外加上內容比對，資料沒變化時不重建清單、不重啟動畫，
+ *     避免每 5 秒刷新一次打斷捲動的連續感。
+ *   v1.0（2026-09-30）：初版，每次刷新整份重繪、靜態列出。
  * 用途：把後端回傳的「最近報到」陣列（已依報到時間新到舊排序）
- *       畫成清單，最新一筆在最上方；每次刷新整份重繪，讓新報到
- *       的人自然「滾」到清單最上面，達成隨報到狀況捲動更新的效果。
+ *       畫成清單，最新一筆在最上方，隨現場報到情況持續往上捲動。
  * 參數：
  *   arr最近報到 - { 姓名, 法名, 組別, 報到時間 } 物件陣列
  * 回傳：無
@@ -410,23 +635,92 @@ function 重繪最近報到名單(arr最近報到) {
   const elList = document.getElementById("recentList");
 
   if (!arr最近報到 || arr最近報到.length === 0) {
+    elList.style.animation = "none";
     elList.innerHTML = "<div class='empty-hint'>尚無報到紀錄</div>";
+    str上次最近報到內容Key = "";
     return;
   }
 
+  // 內容跟上次完全相同就不重建、不重啟動畫，讓捲動維持連續不中斷
+  const str這次內容Key = arr最近報到
+    .map(function (o) { return o.姓名 + "," + o.法名 + "," + o.組別 + "," + o.報到時間; })
+    .join("|");
+  if (str這次內容Key === str上次最近報到內容Key) {
+    return;
+  }
+  str上次最近報到內容Key = str這次內容Key;
+
+  elList.style.animation = "none";
   elList.innerHTML = "";
   arr最近報到.forEach(function (obj一筆) {
-    const elItem = document.createElement("div");
-    elItem.className = "recent-item";
-    const str姓名法名 = obj一筆.姓名 + (obj一筆.法名 ? "（" + obj一筆.法名 + "）" : "");
-    elItem.innerHTML =
-      "<span class='line1'><span class='name'></span><span class='group'></span></span>" +
-      "<span class='time'></span>";
-    elItem.querySelector(".name").textContent = str姓名法名;
-    elItem.querySelector(".group").textContent = obj一筆.組別 || "";
-    elItem.querySelector(".time").textContent = obj一筆.報到時間 || "";
-    elList.appendChild(elItem);
+    elList.appendChild(組出最近報到一筆元素(obj一筆));
   });
+
+  // 項目數量門檻：清單容器裝得下就不用捲動，直接靜態顯示即可
+  const bool需要捲動 = arr最近報到.length > 4;
+  if (bool需要捲動) {
+    // 複製一份接在後面，讓捲動到一半（剛好捲完第一份）時無縫接回開頭
+    arr最近報到.forEach(function (obj一筆) {
+      elList.appendChild(組出最近報到一筆元素(obj一筆));
+    });
+
+    void elList.offsetHeight; // 強制重新計算版面，確保動畫從頭開始播放
+
+    const int捲動速度PxPerSec = 32; // 捲動速度：每秒位移的像素數，數字越大捲越快
+    const num一份高度 = elList.scrollHeight / 2;
+    const num動畫秒數 = num一份高度 / int捲動速度PxPerSec;
+    elList.style.animation = "scrollUp " + num動畫秒數 + "s linear infinite";
+  }
+}
+
+/**
+ * 全域變數：int報到進度目前頁數
+ * 用途：記錄「報到進度總覽」輪播目前顯示第幾頁（0：圓餅圖，
+ *       1：各組報到統計表），供「切換報到進度頁面」判斷位移方向。
+ */
+let int報到進度目前頁數 = 0;
+
+/**
+ * ------------------------------------------------------------
+ * 函式：切換報到進度頁面
+ * 版本：v1.0（2026-09-30）
+ * 用途：把「報到進度總覽」輪播切到指定頁數，用 CSS transform 做
+ *       「往上滾動」的位移動畫（而非直接切換／淡入淡出），並同步
+ *       更新下方頁面指示點（.dot）的樣式。
+ * 參數：
+ *   intIndex - 要切到第幾頁（0 或 1）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 切換報到進度頁面(intIndex) {
+  int報到進度目前頁數 = intIndex;
+  const elCarousel = document.getElementById("progressCarousel");
+  const elTrack = document.getElementById("progressTrack");
+  const num一頁高度 = elCarousel.clientHeight;
+  elTrack.style.transform = "translateY(-" + (intIndex * num一頁高度) + "px)";
+
+  document.querySelectorAll("#progressDots .dot").forEach(function (elDot, intDotIndex) {
+    elDot.classList.toggle("active", intDotIndex === intIndex);
+  });
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：啟動報到進度輪播
+ * 版本：v1.0（2026-09-30，法師訪談決議：每 3 分鐘自動切換一次）
+ * 用途：每隔固定時間，把「報到進度總覽」在圓餅圖／各組報到統計表
+ *       兩頁之間自動切換一次，讓大螢幕不需要人工操作就能輪流
+ *       呈現兩種資訊。畫面固定維持在同一頁（不換網址、不跳頁），
+ *       只有這個卡片內部的兩張「頁面」在輪播。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 啟動報到進度輪播() {
+  const int輪播間隔毫秒 = 3 * 60 * 1000; // 【法師訪談決議】每 3 分鐘切換一次
+  setInterval(function () {
+    切換報到進度頁面((int報到進度目前頁數 + 1) % 2);
+  }, int輪播間隔毫秒);
 }
 
 /**
@@ -475,6 +769,7 @@ async function 初始化頁面() {
 
     更新報到進度看板();
     setInterval(更新報到進度看板, 5000);
+    啟動報到進度輪播();
   } catch (錯誤) {
     console.error("載入場次公開資訊時發生錯誤：", 錯誤);
     document.getElementById("loadingNotice").textContent = "載入時發生未預期錯誤，請重新整理頁面再試一次。";
