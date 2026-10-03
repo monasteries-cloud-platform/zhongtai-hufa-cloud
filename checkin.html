@@ -12,8 +12,25 @@
   /*
    * ============================================================
    * 檔案：現場報到掃碼頁（模組4）
-   * 版本：v2.10（2026-10-03，法師看提示單畫面截圖標註決議：文字加大加粗）
+   * 版本：v2.11（2026-10-03，法師第二輪畫面標註決議：組別文字再加大／
+   *       增加"*說明:"／取消虛線／提示單尺寸改為 B5 的 1/4）
    * 版本歷程：
+   *   - v2.11（2026-10-03，法師看提示單畫面第二輪手寫標註決議）：
+   *     (1) 「上台波次」表格「組別」欄位文字再加大，從 v2.10 的
+   *         20px 改成跟「波次」數字一樣大的 34px（仍不加粗，符合
+   *         標註原意只要求「跟波次數字一樣大」）。
+   *     (2) 提示單底部說明文字前面固定加上「＊說明：」標題
+   *         （新增 .slip-notice-title 樣式、HTML 固定寫死標題文字、
+   *         JS 改把內文塞進新增的 #slipNoticeText，不再直接寫入
+   *         #slipNotice 本身，標題與內文分開）。
+   *     (3) 拿掉說明文字區塊跟上方表格之間的虛線分隔線（.slip-notice
+   *         的 border-top: dashed），改用間距區隔即可。
+   *     (4) 提示單卡片（#cardSlip）尺寸固定為 B5 紙張的 1/4（寬高
+   *         各裁一半＝88mm×125mm），用 mm 為單位設定 width／
+   *         min-height，確保畫面顯示（或日後若需要列印）的提示單
+   *         比例跟實際裁切的 B5 1/4 紙張一致；內容若偶爾超出用
+   *         overflow-y:auto 捲動，不會被裁掉看不到。
+   *     純 CSS／HTML／JS 微調，不影響任何資料邏輯或後端 action。
    *   - v2.10（2026-10-03，法師看實際列印出來的提示單畫面截圖後，
    *     手寫標註決議）：三處文字加大（兩處順便加粗），方便現場
    *     報到者站遠一點也看得清楚：
@@ -367,10 +384,22 @@
   /* 【v2.9 新增，2026-10-03 法師訪談決議，提示單功能】報到成功後
      顯示的提示單卡片：序號／姓名法名／入座組別／上台波次表格／
      說明文字，排版比照法師提供的範例圖，方便操作人員把畫面轉向
-     給報到者拍照留存。顏色沿用既有的強調色變數，不另外新增色票。 */
+     給報到者拍照留存。顏色沿用既有的強調色變數，不另外新增色票。
+     【v2.11 新增，2026-10-03 法師訪談決議：「提示單尺寸大小，B5的
+     1/4」】B5 紙張為 176mm×250mm，裁成四等分（寬高各對半裁）後
+     單張尺寸為 88mm×125mm，改用 mm 為單位固定卡片寬高，讓畫面
+     顯示（或日後若需要列印）的提示單比例跟實際裁切的 B5 1/4 紙張
+     一致；內容如果偶爾超出，改用捲動（overflow-y:auto）而不是
+     被裁掉，避免任何一行說明文字看不到。 */
   #cardSlip.card {
     background: var(--color-confirm-profile-bg);
     border: 2px solid var(--color-accent);
+    width: 88mm;
+    min-height: 125mm;
+    box-sizing: border-box;
+    margin-left: auto;
+    margin-right: auto;
+    overflow-y: auto;
   }
   .slip-serial {
     text-align: right;
@@ -425,14 +454,16 @@
     font-size: 13px;
   }
   /* 【2026-10-03 法師畫面標註決議：「波次」數字文字加大加粗，
-     「組別」文字加大（不加粗）】 */
+     「組別」文字加大（不加粗）；同日第二輪標註再決議「組別文字
+     再加大，和波次的數字一樣大」，改成跟 .slip-wave-num 同樣的
+     34px（維持不加粗，跟法師標註一致）】 */
   .slip-wave-table td.slip-wave-num {
     font-size: 34px;
     font-weight: bold;
     color: var(--color-accent);
   }
   .slip-wave-table td.slip-wave-group {
-    font-size: 20px;
+    font-size: 34px;
     color: var(--color-title);
   }
   .slip-wave-empty {
@@ -441,14 +472,22 @@
     font-size: 13px;
     margin-top: 8px;
   }
+  /* 【2026-10-03 法師畫面標註決議：「取消虛線」】拿掉原本跟上方
+     表格之間的虛線分隔（border-top: dashed），改用間距區隔即可。 */
   .slip-notice {
     margin-top: 14px;
     padding-top: 10px;
-    border-top: 1px dashed var(--color-card-border);
     font-size: 13px;
     color: var(--color-subtitle);
     white-space: pre-line;
     line-height: 1.6;
+  }
+  /* 【2026-10-03 法師畫面標註決議：「增加"*說明:"」】提示單底部
+     說明文字前面加上固定的「＊說明：」標題，跟內文區隔開。 */
+  .slip-notice-title {
+    font-weight: bold;
+    color: var(--color-title);
+    margin-bottom: 2px;
   }
 </style>
 </head>
@@ -503,7 +542,10 @@
       <tbody id="slipWaveBody"></tbody>
     </table>
     <div class="slip-wave-empty" id="slipWaveEmpty" style="display:none;">本場次尚未設定波次對照資料</div>
-    <div class="slip-notice" id="slipNotice" style="display:none;"></div>
+    <div class="slip-notice" id="slipNotice" style="display:none;">
+      <div class="slip-notice-title">＊說明：</div>
+      <div id="slipNoticeText"></div>
+    </div>
   </div>
 
   <!-- 【v2.3 新增】相機掃描 QR Code 報到（比照舊版報到系統
@@ -715,9 +757,13 @@ function 顯示提示單(objResult) {
     });
   }
 
+  // 【2026-10-03 法師畫面標註決議：「增加"*說明:"」】說明文字區塊
+  // 固定加上「＊說明：」標題（HTML 裡已經寫死），這裡只需要把實際
+  // 內文塞進標題下方的 slipNoticeText，不用再處理標題本身
   const elNotice = document.getElementById("slipNotice");
+  const elNoticeText = document.getElementById("slipNoticeText");
   if (objResult.提示單說明文字) {
-    elNotice.textContent = objResult.提示單說明文字;
+    elNoticeText.textContent = objResult.提示單說明文字;
     elNotice.style.display = "block";
   } else {
     elNotice.style.display = "none";
