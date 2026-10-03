@@ -10,8 +10,23 @@
   /*
    * ============================================================
    * 檔案：提報系統資料組核心操作頁面
-   * 版本：v6.16（2026-09-25）
+   * 版本：v6.17（2026-10-03）
    * 版本歷程：
+   *   - v6.17（2026-10-03，法師訪談決議：「組別<->波次對照表和提示單
+   *     底部說明文字獨立儲存，和輸出報到系統功能不共用」）：把「七、
+   *     輸出至報到系統」卡片內的「組別↔上台波次對照表」「提示單底部
+   *     說明文字」兩個欄位拆出來，獨立成新的「七之二、提示單設定」
+   *     卡片（同一個分頁內，排在「七、輸出至報到系統」卡片下方），
+   *     有自己的場次代碼輸入框（inputSlipSessionCode，沿用同一份
+   *     sessionCodeDatalist 下拉選單）與專屬「儲存提示單設定」按鈕
+   *     （新函式 處理儲存提示單設定按鈕點擊，呼叫報到系統新的
+   *     「更新場次提示單設定」action，見 報到系統_02_API入口.gs
+   *     v1.3）；兩個 textarea 依法師畫面標註「輸入區塊加大」，從
+   *     預設高度加大到 rows="10"／min-height:220px。「處理輸出核定
+   *     名單至報到系統按鈕點擊」回退到 v1.3，不再讀取、送出這兩個
+   *     欄位，跟名單輸出完全分開；對應核心邏輯回退見
+   *     提報系統_02_核心邏輯.gs v6.11、報到系統_01_資料存取.gs
+   *     v2.3。
    *   - v6.16（2026-09-25，法師看畫面截圖後訪談決議：「上傳至報到
    *     名單時，只要出席回報有勾選就上傳，沒勾選不上傳。不用檢查
    *     是否完成」，核心修正邏輯在 提報系統_02_核心邏輯.gs v6.10）：
@@ -820,7 +835,6 @@
         <li><strong>聘書≥2張的學員須先在「六」指定好負責組別才能輸出，否則整批擋下並列出未指定名單；出席調查表尚未產生過也會提示先到「六」產生。</strong></li>
         <li>場次代碼可從下拉選單挑選既有場次（覆蓋）或輸入新代碼建立新場次；已存在的場次需二次確認才會覆蓋，「場次名稱」「公告文字」維持不變；已有人報到過的場次會拒絕輸出。</li>
         <li>也可選擇既有場次按「刪除場次」直接移除（無論是否已報到），僅跳出一次瀏覽器確認視窗，此操作無法復原。</li>
-        <li>「組別↔上台波次對照表」「提示單底部說明文字」為選填，供報到成功後顯示的提示單使用（2026-10-03 法師訪談決議，改到這裡統一設定）；<strong>留空＝不異動這個場次原本已有的設定</strong>，之後要修改或補上，只要在這個場次還沒有任何人報到之前，再次輸出並填入新內容即可整批覆蓋；<strong>一旦這個場次已經有人報到，這兩項就跟名單一樣整個鎖住，無法再變動，請務必在報到開始前就確認設定完成。</strong></li>
       </ul>
     </div>
     <div class="step-row">
@@ -830,11 +844,34 @@
       <button class="action secondary" id="btnExportToCheckin" onclick="處理輸出核定名單至報到系統按鈕點擊()">輸出至報到系統</button>
       <button class="action danger" id="btnDeleteSession" onclick="處理刪除場次按鈕點擊()">刪除場次</button>
     </div>
-    <label for="inputExportWaveTable">組別↔上台波次對照表（選填，從 Excel 複製貼上，供報到成功後的提示單使用；留空＝不異動既有設定）</label>
-    <textarea id="inputExportWaveTable" placeholder="組別［Tab］波次&#10;例如：&#10;司儀組［Tab］16&#10;青年推廣組［Tab］22&#10;心燈組［Tab］23&#10;每組一行，直接從 Excel 選取範圍複製後貼上即可；留空表示不異動這個場次原本的設定"></textarea>
-    <label for="inputExportSlipNotice">提示單底部說明文字（選填，供報到成功後的提示單顯示；留空＝不異動既有設定）</label>
-    <textarea id="inputExportSlipNotice" placeholder="例如：&#10;1. 請務必依排定的「入座組別」入座&#10;2. 請依「上台波次」於典禮進行時至中央走道排班"></textarea>
     <div class="msg" id="msgExportToCheckin"></div>
+  </div>
+
+  <!-- 分頁七附屬卡片：提示單設定（2026-10-03 法師訪談決議：「組別<->波次
+       對照表和提示單底部說明文字獨立儲存，和輸出報到系統功能不共用」，
+       從上面「輸出至報到系統」卡片拆出來，改成獨立的場次代碼選擇＋
+       獨立儲存按鈕，跟名單輸出完全分開、互不影響；同一個 tab-panel
+       內放第二張卡片，不是另開一個分頁，避免分頁切換 id 重複） -->
+  <div class="card">
+    <h2>七之二、提示單設定（組別↔上台波次對照表／提示單底部說明文字）</h2>
+
+    <div class="desc">
+      <ul>
+        <li>這兩項設定<strong>跟上方「輸出至報到系統」完全獨立、不共用</strong>：選好場次代碼後按「儲存提示單設定」即可單獨存檔，不會動到名單，也不需要同時輸出名單。</li>
+        <li>場次必須已經存在（可先用上方「輸出至報到系統」或「場次管理」建立），否則會提示「場次不存在」。</li>
+        <li>兩項都是選填，<strong>留空＝不異動這個場次原本已有的設定</strong>，只要帶有內容的那一項才會被覆蓋更新。</li>
+        <li><strong>這兩項設定必須在報到開始前就準備好；一旦這個場次已經有人報到，就跟名單一樣整個鎖住，無法再變動</strong>，請務必在報到開始前確認設定完成。</li>
+      </ul>
+    </div>
+    <div class="step-row">
+      <input type="text" id="inputSlipSessionCode" list="sessionCodeDatalist" autocomplete="off" placeholder="場次代碼（可從下拉選單挑選既有場次）" style="max-width:280px;">
+      <button class="action secondary" id="btnSaveSlipSettings" onclick="處理儲存提示單設定按鈕點擊()">儲存提示單設定</button>
+    </div>
+    <label for="inputExportWaveTable">組別↔上台波次對照表（選填，從 Excel 複製貼上，供報到成功後的提示單使用；留空＝不異動既有設定）</label>
+    <textarea id="inputExportWaveTable" rows="10" style="min-height:220px;" placeholder="組別［Tab］波次&#10;例如：&#10;司儀組［Tab］16&#10;青年推廣組［Tab］22&#10;心燈組［Tab］23&#10;每組一行，直接從 Excel 選取範圍複製後貼上即可；留空表示不異動這個場次原本的設定"></textarea>
+    <label for="inputExportSlipNotice">提示單底部說明文字（選填，供報到成功後的提示單顯示；留空＝不異動既有設定）</label>
+    <textarea id="inputExportSlipNotice" rows="10" style="min-height:220px;" placeholder="例如：&#10;1. 請務必依排定的「入座組別」入座&#10;2. 請依「上台波次」於典禮進行時至中央走道排班"></textarea>
+    <div class="msg" id="msgSlipSettings"></div>
   </div>
   </div>
   <!-- 分頁七結束 -->
@@ -1574,11 +1611,19 @@ function 處理場次代碼欄位變更() {
 /**
  * ------------------------------------------------------------
  * 函式：處理輸出核定名單至報到系統按鈕點擊
- * 版本：v1.2（2026-10-03，法師訪談決議：原本只在 session-admin.html
- *       「建立新場次」輸入的「組別↔波次對照表」「提示單說明文字」
- *       兩項設定，改到這裡統一輸入，同時支援新建立場次與覆蓋既有
- *       場次都可以送出這兩個欄位）
+ * 版本：v1.3（2026-10-03，法師訪談決議：「組別<->波次對照表和提示單
+ *       底部說明文字獨立儲存，和輸出報到系統功能不共用」）：回退
+ *       v1.2 曾新增的「組別↔波次對照表」「提示單說明文字」兩個
+ *       欄位讀取與送出——這兩項設定改到下方獨立的「七之二、提示單
+ *       設定」卡片，由專屬的「儲存提示單設定」按鈕（處理儲存提示單
+ *       設定按鈕點擊）呼叫報到系統新的「更新場次提示單設定」action
+ *       處理，跟這裡的名單輸出完全分開、互不影響。
  * 版本歷程：
+ *   - v1.2（2026-10-03，已回退，見上方 v1.3 說明）：曾新增讀取
+ *     「組別↔上台波次對照表」「提示單底部說明文字」兩個選填欄位
+ *     一併送出，後法師決議改成完全獨立儲存，故回退。
+ *   - v1.1（2026-09-23）：成功後（不論新建立或覆蓋）重新呼叫
+ *     載入報到場次清單，讓「場次代碼」下拉選單立即反映最新場次。
  *   - v1.0（2026-09-22，新增，「報到系統輸出」功能，2026-09-21～
  *     22 訪談決議）：把目前的核定名單，轉成報到系統可以報到的
  *     一個新場次（或覆蓋一個尚未有人報到的既有場次）。先以「確認
@@ -1587,18 +1632,11 @@ function 處理場次代碼欄位變更() {
  *     後，才帶「確認覆蓋:true」重新呼叫一次；若場次已經有人報到
  *     過，後端會直接拒絕，這裡把訊息原樣顯示給資料組看，不會跳出
  *     二次確認視窗。
- *   - v1.1（2026-09-23）：成功後（不論新建立或覆蓋）重新呼叫
- *     載入報到場次清單，讓「場次代碼」下拉選單立即反映最新場次。
- *   - v1.2（2026-10-03）：新增讀取「組別↔上台波次對照表」「提示單
- *     底部說明文字」兩個選填欄位一併送出；成功後清空這兩個欄位
- *     （場次代碼／名稱保留，方便連續對同一場次操作）。
  * ------------------------------------------------------------
  */
 async function 處理輸出核定名單至報到系統按鈕點擊() {
   const str場次代碼 = document.getElementById("inputExportSessionCode").value.trim();
   const str場次名稱 = document.getElementById("inputExportSessionName").value.trim();
-  const str波次對照表文字 = document.getElementById("inputExportWaveTable").value;
-  const str提示單說明文字 = document.getElementById("inputExportSlipNotice").value;
 
   if (!str場次代碼) {
     顯示區塊訊息("msgExportToCheckin", "請先輸入或選擇場次代碼。", "error");
@@ -1613,8 +1651,6 @@ async function 處理輸出核定名單至報到系統按鈕點擊() {
     let objResult = await 呼叫提報API("輸出核定名單至報到系統", {
       場次代碼: str場次代碼,
       場次名稱: str場次名稱,
-      波次對照表文字: str波次對照表文字,
-      提示單說明文字: str提示單說明文字,
       確認覆蓋: false
     });
 
@@ -1628,21 +1664,59 @@ async function 處理輸出核定名單至報到系統按鈕點擊() {
       objResult = await 呼叫提報API("輸出核定名單至報到系統", {
         場次代碼: str場次代碼,
         場次名稱: str場次名稱,
-        波次對照表文字: str波次對照表文字,
-        提示單說明文字: str提示單說明文字,
         確認覆蓋: true
       });
     }
 
     顯示區塊訊息("msgExportToCheckin", objResult.訊息 || (objResult.成功 ? "輸出完成。" : "輸出失敗。"), objResult.成功 ? "success" : "error");
     if (objResult.成功) {
-      document.getElementById("inputExportWaveTable").value = "";
-      document.getElementById("inputExportSlipNotice").value = "";
       await 載入報到場次清單();
     }
   } catch (錯誤) {
     console.error("輸出核定名單至報到系統時發生未預期錯誤：", 錯誤);
     顯示區塊訊息("msgExportToCheckin", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理儲存提示單設定按鈕點擊
+ * 版本：v1.0（2026-10-03，法師訪談決議：「組別<->波次對照表和提示單
+ *       底部說明文字獨立儲存，和輸出報到系統功能不共用」新增）
+ * 用途：獨立儲存「組別↔上台波次對照表」「提示單底部說明文字」
+ *       這兩項設定，呼叫報到系統新的「更新場次提示單設定」action，
+ *       跟「輸出至報到系統」（處理輸出核定名單至報到系統按鈕點擊）
+ *       完全分開、互不影響。場次必須已經存在；若場次已經有人
+ *       報到，後端會直接拒絕並說明原因，這裡把訊息原樣顯示。
+ * ------------------------------------------------------------
+ */
+async function 處理儲存提示單設定按鈕點擊() {
+  const str場次代碼 = document.getElementById("inputSlipSessionCode").value.trim();
+  const str波次對照表文字 = document.getElementById("inputExportWaveTable").value;
+  const str提示單說明文字 = document.getElementById("inputExportSlipNotice").value;
+
+  if (!str場次代碼) {
+    顯示區塊訊息("msgSlipSettings", "請先輸入或選擇場次代碼。", "error");
+    return;
+  }
+
+  const btn = document.getElementById("btnSaveSlipSettings");
+  btn.disabled = true;
+  顯示區塊訊息("msgSlipSettings", "儲存中，請稍候...", "info");
+
+  try {
+    const objResult = await 呼叫報到API("更新場次提示單設定", {
+      場次代碼: str場次代碼,
+      波次對照表文字: str波次對照表文字,
+      提示單說明文字: str提示單說明文字
+    });
+
+    顯示區塊訊息("msgSlipSettings", objResult.訊息 || (objResult.成功 ? "儲存完成。" : "儲存失敗。"), objResult.成功 ? "success" : "error");
+  } catch (錯誤) {
+    console.error("儲存提示單設定時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgSlipSettings", "系統發生未預期錯誤，請稍後再試或聯絡工程人員。", "error");
   } finally {
     btn.disabled = false;
   }
