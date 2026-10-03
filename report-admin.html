@@ -820,6 +820,7 @@
         <li><strong>聘書≥2張的學員須先在「六」指定好負責組別才能輸出，否則整批擋下並列出未指定名單；出席調查表尚未產生過也會提示先到「六」產生。</strong></li>
         <li>場次代碼可從下拉選單挑選既有場次（覆蓋）或輸入新代碼建立新場次；已存在的場次需二次確認才會覆蓋，「場次名稱」「公告文字」維持不變；已有人報到過的場次會拒絕輸出。</li>
         <li>也可選擇既有場次按「刪除場次」直接移除（無論是否已報到），僅跳出一次瀏覽器確認視窗，此操作無法復原。</li>
+        <li>「組別↔上台波次對照表」「提示單底部說明文字」為選填，供報到成功後顯示的提示單使用（2026-10-03 法師訪談決議，改到這裡統一設定）；<strong>留空＝不異動這個場次原本已有的設定</strong>，之後要修改或補上，只要在這個場次還沒有任何人報到之前，再次輸出並填入新內容即可整批覆蓋；<strong>一旦這個場次已經有人報到，這兩項就跟名單一樣整個鎖住，無法再變動，請務必在報到開始前就確認設定完成。</strong></li>
       </ul>
     </div>
     <div class="step-row">
@@ -829,6 +830,10 @@
       <button class="action secondary" id="btnExportToCheckin" onclick="處理輸出核定名單至報到系統按鈕點擊()">輸出至報到系統</button>
       <button class="action danger" id="btnDeleteSession" onclick="處理刪除場次按鈕點擊()">刪除場次</button>
     </div>
+    <label for="inputExportWaveTable">組別↔上台波次對照表（選填，從 Excel 複製貼上，供報到成功後的提示單使用；留空＝不異動既有設定）</label>
+    <textarea id="inputExportWaveTable" placeholder="組別［Tab］波次&#10;例如：&#10;司儀組［Tab］16&#10;青年推廣組［Tab］22&#10;心燈組［Tab］23&#10;每組一行，直接從 Excel 選取範圍複製後貼上即可；留空表示不異動這個場次原本的設定"></textarea>
+    <label for="inputExportSlipNotice">提示單底部說明文字（選填，供報到成功後的提示單顯示；留空＝不異動既有設定）</label>
+    <textarea id="inputExportSlipNotice" placeholder="例如：&#10;1. 請務必依排定的「入座組別」入座&#10;2. 請依「上台波次」於典禮進行時至中央走道排班"></textarea>
     <div class="msg" id="msgExportToCheckin"></div>
   </div>
   </div>
@@ -1569,7 +1574,10 @@ function 處理場次代碼欄位變更() {
 /**
  * ------------------------------------------------------------
  * 函式：處理輸出核定名單至報到系統按鈕點擊
- * 版本：v1.1（2026-09-23，法師畫面標註意見）
+ * 版本：v1.2（2026-10-03，法師訪談決議：原本只在 session-admin.html
+ *       「建立新場次」輸入的「組別↔波次對照表」「提示單說明文字」
+ *       兩項設定，改到這裡統一輸入，同時支援新建立場次與覆蓋既有
+ *       場次都可以送出這兩個欄位）
  * 版本歷程：
  *   - v1.0（2026-09-22，新增，「報到系統輸出」功能，2026-09-21～
  *     22 訪談決議）：把目前的核定名單，轉成報到系統可以報到的
@@ -1581,11 +1589,16 @@ function 處理場次代碼欄位變更() {
  *     二次確認視窗。
  *   - v1.1（2026-09-23）：成功後（不論新建立或覆蓋）重新呼叫
  *     載入報到場次清單，讓「場次代碼」下拉選單立即反映最新場次。
+ *   - v1.2（2026-10-03）：新增讀取「組別↔上台波次對照表」「提示單
+ *     底部說明文字」兩個選填欄位一併送出；成功後清空這兩個欄位
+ *     （場次代碼／名稱保留，方便連續對同一場次操作）。
  * ------------------------------------------------------------
  */
 async function 處理輸出核定名單至報到系統按鈕點擊() {
   const str場次代碼 = document.getElementById("inputExportSessionCode").value.trim();
   const str場次名稱 = document.getElementById("inputExportSessionName").value.trim();
+  const str波次對照表文字 = document.getElementById("inputExportWaveTable").value;
+  const str提示單說明文字 = document.getElementById("inputExportSlipNotice").value;
 
   if (!str場次代碼) {
     顯示區塊訊息("msgExportToCheckin", "請先輸入或選擇場次代碼。", "error");
@@ -1600,6 +1613,8 @@ async function 處理輸出核定名單至報到系統按鈕點擊() {
     let objResult = await 呼叫提報API("輸出核定名單至報到系統", {
       場次代碼: str場次代碼,
       場次名稱: str場次名稱,
+      波次對照表文字: str波次對照表文字,
+      提示單說明文字: str提示單說明文字,
       確認覆蓋: false
     });
 
@@ -1613,12 +1628,16 @@ async function 處理輸出核定名單至報到系統按鈕點擊() {
       objResult = await 呼叫提報API("輸出核定名單至報到系統", {
         場次代碼: str場次代碼,
         場次名稱: str場次名稱,
+        波次對照表文字: str波次對照表文字,
+        提示單說明文字: str提示單說明文字,
         確認覆蓋: true
       });
     }
 
     顯示區塊訊息("msgExportToCheckin", objResult.訊息 || (objResult.成功 ? "輸出完成。" : "輸出失敗。"), objResult.成功 ? "success" : "error");
     if (objResult.成功) {
+      document.getElementById("inputExportWaveTable").value = "";
+      document.getElementById("inputExportSlipNotice").value = "";
       await 載入報到場次清單();
     }
   } catch (錯誤) {

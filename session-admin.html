@@ -297,10 +297,15 @@
   <div class="tab-panel active" id="tabPanel-create">
   <div class="card">
     <h2>建立新場次</h2>
+    <!-- 【v1.2 修正，2026-10-03 法師訪談決議】出席名單／組別↔波次
+         對照表／提示單說明文字，三項全部移到「精舍管理系統－提報
+         系統」的「輸出至報到系統」功能統一設定，這裡的「建立新
+         場次」只用來先建立一個空殼場次（場次代碼／名稱／公告
+         文字），名單與提示單相關設定一律改到輸出時才貼入。 -->
     <div class="desc">
       <ul>
         <li>場次代碼同時作為試算表分頁名稱，建議用日期或簡短活動代號（如 1023、2026頒證大典），建立後不建議更改。</li>
-        <li>出席名單從 Excel 複製整欄整列直接貼上，欄位順序：學員編號、姓名、法名、性別、組別、職稱、備註、注意事項（共 8 欄；序號／報到／報到時間由系統自動處理）。</li>
+        <li>這裡只建立場次的基本資料，尚未包含出席名單；出席名單、組別↔上台波次對照表、提示單底部說明文字，請改到「精舍管理系統」的「輸出至報到系統」功能一併送出。</li>
       </ul>
     </div>
 
@@ -312,20 +317,6 @@
 
     <label for="inputAnnouncement">法會公告文字（選填，供報到頁顯示給大眾）</label>
     <input type="text" id="inputAnnouncement" autocomplete="off" placeholder="例如：請提前30分鐘到場">
-
-    <label for="inputAttendeeList">出席名單（從 Excel 複製貼上）</label>
-    <textarea id="inputAttendeeList" placeholder="學員編號［Tab］姓名［Tab］法名［Tab］性別［Tab］組別［Tab］職稱［Tab］備註［Tab］注意事項&#10;每人一行，直接從 Excel 選取範圍複製後貼上即可"></textarea>
-
-    <!-- 【v1.1 新增，2026-10-03 法師訪談決議】提示單功能：組別↔波次
-         對照表與提示單說明文字都是「每個場次各自設定」（跟每年活動
-         安排可能不同的情況一致），建立場次時選填，之後若要補設定，
-         目前還沒有「編輯場次」功能，只能直接到試算表對應分頁/欄位
-         手動調整（建立場次時已一併說明在下方描述文字中）。 -->
-    <label for="inputWaveTable">組別↔上台波次對照表（選填，從 Excel 複製貼上，供報到成功後的提示單使用）</label>
-    <textarea id="inputWaveTable" placeholder="組別［Tab］波次&#10;例如：&#10;司儀組［Tab］16&#10;青年推廣組［Tab］22&#10;心燈組［Tab］23&#10;每組一行，直接從 Excel 選取範圍複製後貼上即可；不需要提示單功能可以留空"></textarea>
-
-    <label for="inputSlipNotice">提示單底部說明文字（選填，供報到成功後的提示單顯示）</label>
-    <textarea id="inputSlipNotice" placeholder="例如：&#10;1. 請務必依排定的「入座組別」入座&#10;2. 請依「上台波次」於典禮進行時至中央走道排班"></textarea>
 
     <button class="action" id="btnCreateSession" onclick="處理建立場次按鈕點擊()">建立場次</button>
     <div class="msg" id="msgCreateSession"></div>
@@ -414,16 +405,17 @@ function 處理登出按鈕點擊() {
 /**
  * ------------------------------------------------------------
  * 函式：處理建立場次按鈕點擊
- * 版本：v1.1（2026-10-03，法師訪談決議，新增「提示單」功能）
+ * 版本：v1.2（2026-10-03，法師訪談決議：出席名單／組別↔波次對照表／
+ *       提示單說明文字，三項全部移到「精舍管理系統」的「輸出至
+ *       報到系統」功能統一設定，這裡只保留場次代碼／場次名稱／
+ *       公告文字三項，用來先建立一個空殼場次）
  * 版本歷程：
  *   v1.0（2026-09-16）初版。
- * 用途：讀取畫面上的場次代碼、場次名稱、公告文字、出席名單、
- *       波次對照表、提示單說明文字，呼叫後端「建立場次」API。
+ *   v1.1（2026-10-03）新增讀取並送出「波次對照表文字」「提示單
+ *     說明文字」（提示單功能初版，後續 v1.2 改移到「精舍管理系統」）。
+ * 用途：讀取畫面上的場次代碼、場次名稱、公告文字，呼叫後端
+ *       「建立場次」API，建立一個尚未有出席名單的空殼場次。
  *       成功後清空表單並重新載入場次清單，讓畫面立即反映最新狀態。
- * 變更說明（v1.1）：
- *   新增讀取並送出「波次對照表文字」與「提示單說明文字」兩個新欄位
- *   （皆為選填），供現場報到頁報到成功後顯示提示單使用，詳見
- *   報到系統_03_現場報到邏輯.gs 的版本說明了解完整功能脈絡。
  * 參數：無（直接從畫面欄位讀取）
  * 回傳：無
  * ------------------------------------------------------------
@@ -432,18 +424,9 @@ async function 處理建立場次按鈕點擊() {
   const str場次代碼 = document.getElementById("inputSessionCode").value.trim();
   const str場次名稱 = document.getElementById("inputSessionName").value.trim();
   const str公告文字 = document.getElementById("inputAnnouncement").value.trim();
-  const str出席名單文字 = document.getElementById("inputAttendeeList").value;
-  // 【v1.1 新增，2026-10-03】提示單功能：組別↔波次對照表與提示單
-  // 說明文字都是選填，留空代表這個場次不使用提示單功能
-  const str波次對照表文字 = document.getElementById("inputWaveTable").value;
-  const str提示單說明文字 = document.getElementById("inputSlipNotice").value.trim();
 
   if (!str場次代碼) {
     顯示區塊訊息("msgCreateSession", "請輸入場次代碼。", "error");
-    return;
-  }
-  if (!str出席名單文字 || str出席名單文字.trim() === "") {
-    顯示區塊訊息("msgCreateSession", "請貼上出席名單資料。", "error");
     return;
   }
 
@@ -465,10 +448,7 @@ async function 處理建立場次按鈕點擊() {
       token: obj登入資訊.token,
       場次代碼: str場次代碼,
       場次名稱: str場次名稱,
-      公告文字: str公告文字,
-      出席名單文字: str出席名單文字,
-      波次對照表文字: str波次對照表文字,
-      提示單說明文字: str提示單說明文字
+      公告文字: str公告文字
     });
 
     if (objResult.成功) {
@@ -476,9 +456,6 @@ async function 處理建立場次按鈕點擊() {
       document.getElementById("inputSessionCode").value = "";
       document.getElementById("inputSessionName").value = "";
       document.getElementById("inputAnnouncement").value = "";
-      document.getElementById("inputAttendeeList").value = "";
-      document.getElementById("inputWaveTable").value = "";
-      document.getElementById("inputSlipNotice").value = "";
       await 載入場次清單();
     } else {
       顯示區塊訊息("msgCreateSession", objResult.訊息 || "建立失敗，請確認輸入內容是否正確。", "error");
