@@ -8,9 +8,13 @@
   /*
    * ============================================================
    * 檔案：報到者提示單自查頁（模組4附屬頁面）
-   * 版本：v1.1（2026-10-03，法師訪談決議：「提示單自查頁規格 比照
-   *       報到的提示單規格」）
+   * 版本：v1.2（2026-10-03，法師看實機畫面截圖後訪談決議：「*說明:」
+   *       標題中間不要有空白，報到提示單和提示單自查頁要同規格）
    * 版本歷程：
+   *   v1.2（2026-10-03）：同步 checkin.html v2.12 的修正——說明文字
+   *     標題原本用全形「＊說明：」，全形標點本身字型帶有左右留白、
+   *     視覺上像「中間有空白」，改成半形「*說明:」消除這個視覺
+   *     空隙，純文字字元調整。
    *   v1.1（2026-10-03）：同步套用 checkin.html 現場報到頁提示單
    *     卡片（#cardSlip）v2.10／v2.11 的所有樣式調整，讓自查頁跟
    *     現場報到頁看到的提示單規格完全一致：
@@ -301,7 +305,7 @@
     </table>
     <div class="slip-wave-empty" id="slipWaveEmpty" style="display:none;">本場次尚未設定波次對照資料</div>
     <div class="slip-notice" id="slipNotice" style="display:none;">
-      <div class="slip-notice-title">＊說明：</div>
+      <div class="slip-notice-title">*說明:</div>
       <div id="slipNoticeText"></div>
     </div>
   </div>
