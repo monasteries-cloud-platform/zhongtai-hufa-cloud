@@ -12,8 +12,18 @@
   /*
    * ============================================================
    * 檔案：現場報到掃碼頁（模組4）
-   * 版本：v2.8（2026-09-30，法師確認：LOGO 位置修正為文字左側）
+   * 版本：v2.9（2026-10-03，法師訪談決議，新增「提示單」功能）
    * 版本歷程：
+   *   - v2.9（2026-10-03）：頒證典禮各組會分不同波次上台領證合影，
+   *     報到成功後，除了原本的報到結果訊息，新增顯示一張「提示單」
+   *     卡片（#cardSlip），告訴報到者「入座組別」與「上台波次」，
+   *     供操作人員把畫面（手機或平板）轉向給報到者拍照留存（訪談
+   *     過程確認過不需要實際列印，只要畫面顯示即可）。提示單所需
+   *     的資料（序號／入座組別／上台波次清單／說明文字）由後端
+   *     「確認報到」action 一併回傳，詳見
+   *     報到系統_03_現場報到邏輯.gs 的版本說明了解完整功能脈絡與
+   *     資料來源。新增「顯示提示單」「清空提示單」兩支函式，並在
+   *     「送出報到」的成功分支呼叫顯示、其餘分支呼叫清空。
    *   - v2.8（2026-09-30）：v2.7 上線後法師看畫面反映，「放在系統
    *     名稱右側」原意是 LOGO 緊接在文字左邊、兩者靠在一起排成
    *     「LOGO＋系統名稱」，不是把圖示推到整行最右端（v2.7 用
@@ -341,6 +351,88 @@
     background: #FBF9F4;
     color: var(--color-subtitle);
   }
+
+  /* 【v2.9 新增，2026-10-03 法師訪談決議，提示單功能】報到成功後
+     顯示的提示單卡片：序號／姓名法名／入座組別／上台波次表格／
+     說明文字，排版比照法師提供的範例圖，方便操作人員把畫面轉向
+     給報到者拍照留存。顏色沿用既有的強調色變數，不另外新增色票。 */
+  #cardSlip.card {
+    background: var(--color-confirm-profile-bg);
+    border: 2px solid var(--color-accent);
+  }
+  .slip-serial {
+    text-align: right;
+    font-size: 13px;
+    color: var(--color-subtitle);
+  }
+  .slip-name {
+    text-align: center;
+    margin-top: 2px;
+  }
+  .slip-name .slip-name-main {
+    font-size: 30px;
+    font-weight: bold;
+    color: var(--color-title);
+  }
+  .slip-name .slip-name-dharma {
+    font-size: 16px;
+    color: var(--color-subtitle);
+    margin-left: 6px;
+  }
+  .slip-seatgroup {
+    text-align: center;
+    font-size: 18px;
+    margin-top: 10px;
+    color: var(--color-title);
+  }
+  .slip-seatgroup strong {
+    color: var(--color-accent);
+  }
+  .slip-wave-title {
+    margin-top: 16px;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--color-subtitle);
+  }
+  .slip-wave-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 6px;
+  }
+  .slip-wave-table th, .slip-wave-table td {
+    border: 1px solid var(--color-card-border);
+    padding: 8px;
+    text-align: center;
+  }
+  .slip-wave-table th {
+    background: #FBF9F4;
+    color: var(--color-subtitle);
+    font-size: 13px;
+  }
+  .slip-wave-table td.slip-wave-num {
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--color-accent);
+  }
+  .slip-wave-table td.slip-wave-group {
+    font-size: 15px;
+    color: var(--color-title);
+  }
+  .slip-wave-empty {
+    text-align: center;
+    color: var(--color-subtitle);
+    font-size: 13px;
+    margin-top: 8px;
+  }
+  .slip-notice {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--color-card-border);
+    font-size: 13px;
+    color: var(--color-subtitle);
+    white-space: pre-line;
+    line-height: 1.6;
+  }
 </style>
 </head>
 <body>
@@ -375,6 +467,26 @@
   <div class="card" id="cardResult">
     <div class="msg" id="msgResult"></div>
     <div class="candidate-list" id="candidateList"></div>
+  </div>
+
+  <!-- 【v2.9 新增，2026-10-03 法師訪談決議】提示單：報到成功後顯示，
+       告訴報到者「入座組別」與「上台波次」，供現場操作人員把畫面
+       轉向給報到者拍照（訪談過程確認過不需要實際列印，只要畫面
+       顯示即可），詳見「顯示提示單」函式說明。預設隱藏，只有報到
+       成功、且這個場次有設定對應資料時才會顯示內容。 -->
+  <div class="card" id="cardSlip" style="display:none;">
+    <div class="slip-serial"><span id="slipSerial"></span></div>
+    <div class="slip-name">
+      <span class="slip-name-main" id="slipNameMain"></span><span class="slip-name-dharma" id="slipNameDharma"></span>
+    </div>
+    <div class="slip-seatgroup">入座組別：<strong id="slipSeatGroup"></strong></div>
+    <div class="slip-wave-title">上台波次</div>
+    <table class="slip-wave-table">
+      <thead><tr><th>波次</th><th>組別</th></tr></thead>
+      <tbody id="slipWaveBody"></tbody>
+    </table>
+    <div class="slip-wave-empty" id="slipWaveEmpty" style="display:none;">本場次尚未設定波次對照資料</div>
+    <div class="slip-notice" id="slipNotice" style="display:none;"></div>
   </div>
 
   <!-- 【v2.3 新增】相機掃描 QR Code 報到（比照舊版報到系統
@@ -529,6 +641,76 @@ function 顯示候選清單(arr候選清單) {
 
 /**
  * ------------------------------------------------------------
+ * 函式：清空提示單
+ * 版本：v1.0（2026-10-03，法師訪談決議，提示單功能）
+ * 用途：每次重新查詢（不論結果是成功、候選清單、或失敗）之前，
+ *       先把上一次顯示的提示單隱藏並清空內容，避免畫面殘留上一位
+ *       報到者的提示單資料。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 清空提示單() {
+  document.getElementById("cardSlip").style.display = "none";
+  document.getElementById("slipWaveBody").innerHTML = "";
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：顯示提示單
+ * 版本：v1.0（2026-10-03，法師訪談決議，提示單功能）
+ * 用途：報到成功（或自查頁查到已報到）後，把後端回傳的提示單資料
+ *       （序號／姓名／法名／入座組別／上台波次清單／提示單說明
+ *       文字）畫到 #cardSlip 卡片上並顯示出來，供操作人員把畫面
+ *       轉向給報到者拍照（2026-10-03 訪談確認：不列印，只要畫面
+ *       顯示即可）。
+ *       若後端沒有回傳任何欄位（例如這個場次是舊版本建立、沒有
+ *       設定波次對照表與說明文字），卡片仍會顯示姓名與入座組別，
+ *       「上台波次」區塊改顯示「本場次尚未設定波次對照資料」的
+ *       提示文字，說明文字區塊則直接隱藏，不會顯示空白段落。
+ * 參數：
+ *   objResult - 後端回傳的結果物件，需包含 序號、姓名、法名、
+ *               入座組別、上台波次清單（陣列）、提示單說明文字
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 顯示提示單(objResult) {
+  document.getElementById("slipSerial").textContent = objResult.序號 ? "序號 " + objResult.序號 : "";
+  document.getElementById("slipNameMain").textContent = objResult.姓名 || "";
+  document.getElementById("slipNameDharma").textContent = objResult.法名 || "";
+  document.getElementById("slipSeatGroup").textContent = objResult.入座組別 || "（未設定）";
+
+  const elWaveBody = document.getElementById("slipWaveBody");
+  const elWaveEmpty = document.getElementById("slipWaveEmpty");
+  elWaveBody.innerHTML = "";
+
+  const arr上台波次清單 = objResult.上台波次清單 || [];
+  if (arr上台波次清單.length === 0) {
+    elWaveEmpty.style.display = "block";
+  } else {
+    elWaveEmpty.style.display = "none";
+    arr上台波次清單.forEach(function (obj一筆) {
+      const elTr = document.createElement("tr");
+      elTr.innerHTML = '<td class="slip-wave-num"></td><td class="slip-wave-group"></td>';
+      elTr.children[0].textContent = obj一筆.波次;
+      elTr.children[1].textContent = obj一筆.組別;
+      elWaveBody.appendChild(elTr);
+    });
+  }
+
+  const elNotice = document.getElementById("slipNotice");
+  if (objResult.提示單說明文字) {
+    elNotice.textContent = objResult.提示單說明文字;
+    elNotice.style.display = "block";
+  } else {
+    elNotice.style.display = "none";
+  }
+
+  document.getElementById("cardSlip").style.display = "block";
+}
+
+/**
+ * ------------------------------------------------------------
  * 函式：送出報到
  * 版本：v1.1（2026-09-17，取代 v1.0 的「處理查詢按鈕點擊」＋
  *       「處理確認報到按鈕點擊」兩段式流程）
@@ -574,6 +756,9 @@ function 顯示候選清單(arr候選清單) {
 async function 送出報到(str輸入內容) {
   document.getElementById("cardResult").style.display = "block";
   清空候選清單();
+  // 【v1.3 新增，2026-10-03】每次重新查詢前先清空上一位的提示單，
+  // 避免畫面殘留，詳見「清空提示單」函式說明
+  清空提示單();
 
   const btn查詢按鈕 = document.getElementById("btnSearch");
   const elInput = document.getElementById("inputStudentId");
@@ -611,6 +796,10 @@ async function 送出報到(str輸入內容) {
         組合含注意事項訊息(str含姓名訊息, objResult.注意事項),
         "success"
       );
+      // 【v1.3 新增，2026-10-03】報到成功後顯示提示單（入座組別／
+      // 上台波次），供操作人員把畫面轉向給報到者拍照，詳見
+      // 「顯示提示單」函式說明
+      顯示提示單(objResult);
       // 報到成功後清空輸入框，準備讓下一位報到；【v1.2 修正】不再
       // 立即 focus() 移回輸入框，避免鍵盤馬上跳出來又把結果訊息
       // 擋住／捲走，操作人員看完結果後自行點輸入框即可繼續下一位

@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>護法會提示單查詢</title>
+<style>
+  /*
+   * ============================================================
+   * 檔案：報到者提示單自查頁（模組4附屬頁面）
+   * 版本：v1.0（2026-10-03，法師訪談決議，提示單自查功能）
+   * 說明：
+   *   公開頁面，不需要登入密碼（比照 checkin.html 現場報到頁的
+   *   公開原則，2026-09-16 訪談確認的精神延伸），已經報到過的
+   *   學員本人可以自行輸入學員編號或姓名，查看自己的提示單內容
+   *   （入座組別／上台波次），不需要操作人員協助。
+   *   精舍代碼與場次代碼由網址參數帶入，例如：
+   *   slip-query.html?temple=A&session=1025
+   *   畫面樣式、顏色、提示單卡片排版，比照 checkin.html 現場報到頁
+   *   沿用相同的設計語彙（米色底、深咖啡色按鈕），讓報到者感覺是
+   *   同一套系統的一部分，而不是另外獨立的頁面。
+   *   查詢邏輯是「唯讀」，不會寫入任何報到紀錄，也不會讓未報到的
+   *   人看到入座組別／上台波次資料（2026-10-03 訪談確認：避免跟
+   *   現場報到流程脫節，未報到者一律顯示「尚未報到，請先到現場
+   *   報到」提示）。
+   * ============================================================
+   */
+  :root {
+    --color-bg: #F5F1E6;
+    --color-card-bg: #FFFFFF;
+    --color-card-border: #E4DCC8;
+    --color-title: #2E2418;
+    --color-subtitle: #8A7B63;
+    --color-accent: #6B4226;
+    --color-accent-hover: #533019;
+    --color-accent-disabled: #C9B9A3;
+    --color-danger: #B3372C;
+    --color-confirm-card-bg: #EEF3E7;
+    --color-confirm-card-border: #C7D6B8;
+    --color-confirm-profile-bg: #F7FAF3;
+  }
+  body {
+    font-family: "微軟正黑體", "PMingLiU", sans-serif;
+    background: var(--color-bg);
+    color: var(--color-title);
+    margin: 0;
+    padding: 24px 16px 60px 16px;
+  }
+  .wrap {
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .header-card {
+    padding: 4px 4px 18px 4px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--color-card-border);
+  }
+  .header-card h1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 21px;
+    margin: 0 0 6px 0;
+    color: var(--color-title);
+  }
+  .header-card h1 .title-logo-icon {
+    height: 30px;
+    width: auto;
+    flex-shrink: 0;
+  }
+  .header-card .session-line {
+    font-size: 14px;
+    color: var(--color-subtitle);
+  }
+
+  .card {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-card-border);
+    border-radius: 10px;
+    padding: 22px 20px;
+    margin-bottom: 18px;
+  }
+  #cardResult.card {
+    background: var(--color-confirm-card-bg);
+    border-color: var(--color-confirm-card-border);
+  }
+
+  .candidate-list { margin-top: 6px; }
+  .candidate-item {
+    width: 100%;
+    display: block;
+    text-align: left;
+    background: var(--color-confirm-profile-bg);
+    border: 1px solid var(--color-confirm-card-border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-top: 10px;
+    font-size: 20px;
+    color: var(--color-title);
+    cursor: pointer;
+  }
+  .candidate-item:hover:not(:disabled) { background: #FFFFFF; }
+  .candidate-item:disabled { color: var(--color-subtitle); cursor: not-allowed; }
+
+  label {
+    display: block;
+    font-weight: bold;
+    font-size: 13px;
+    margin-bottom: 8px;
+    color: var(--color-title);
+  }
+  input[type=text] {
+    width: 100%;
+    padding: 14px 12px;
+    box-sizing: border-box;
+    border: 1px solid var(--color-card-border);
+    border-radius: 8px;
+    font-size: 18px;
+    text-align: center;
+    letter-spacing: 1px;
+    background: #FBF9F4;
+    color: var(--color-title);
+  }
+  input[type=text]:disabled { background: #EFEBE1; color: var(--color-subtitle); }
+
+  button.big-action {
+    width: 100%;
+    margin-top: 14px;
+    padding: 14px;
+    background: var(--color-accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 17px;
+    cursor: pointer;
+  }
+  button.big-action:disabled { background: var(--color-accent-disabled); cursor: not-allowed; }
+  button.big-action:hover:not(:disabled) { background: var(--color-accent-hover); }
+
+  .msg { margin-top: 14px; font-size: 18px; line-height: 1.5; text-align: center; min-height: 18px; white-space: pre-line; }
+  .msg:first-child { margin-top: 0; }
+  .msg.error { color: var(--color-danger); }
+  .msg.success { color: #3F6B2E; font-weight: bold; }
+  .msg.info { color: var(--color-subtitle); }
+
+  #loadingNotice {
+    text-align: center;
+    color: var(--color-subtitle);
+    padding: 40px 0;
+  }
+
+  /* 提示單卡片，樣式與 checkin.html 的 #cardSlip 一致，方便報到者
+     感覺是同一套系統（詳見 checkin.html v2.9 版本說明） */
+  #cardSlip.card {
+    background: var(--color-confirm-profile-bg);
+    border: 2px solid var(--color-accent);
+  }
+  .slip-serial {
+    text-align: right;
+    font-size: 13px;
+    color: var(--color-subtitle);
+  }
+  .slip-name {
+    text-align: center;
+    margin-top: 2px;
+  }
+  .slip-name .slip-name-main {
+    font-size: 30px;
+    font-weight: bold;
+    color: var(--color-title);
+  }
+  .slip-name .slip-name-dharma {
+    font-size: 16px;
+    color: var(--color-subtitle);
+    margin-left: 6px;
+  }
+  .slip-seatgroup {
+    text-align: center;
+    font-size: 18px;
+    margin-top: 10px;
+    color: var(--color-title);
+  }
+  .slip-seatgroup strong {
+    color: var(--color-accent);
+  }
+  .slip-wave-title {
+    margin-top: 16px;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--color-subtitle);
+  }
+  .slip-wave-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 6px;
+  }
+  .slip-wave-table th, .slip-wave-table td {
+    border: 1px solid var(--color-card-border);
+    padding: 8px;
+    text-align: center;
+  }
+  .slip-wave-table th {
+    background: #FBF9F4;
+    color: var(--color-subtitle);
+    font-size: 13px;
+  }
+  .slip-wave-table td.slip-wave-num {
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--color-accent);
+  }
+  .slip-wave-table td.slip-wave-group {
+    font-size: 15px;
+    color: var(--color-title);
+  }
+  .slip-wave-empty {
+    text-align: center;
+    color: var(--color-subtitle);
+    font-size: 13px;
+    margin-top: 8px;
+  }
+  .slip-notice {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--color-card-border);
+    font-size: 13px;
+    color: var(--color-subtitle);
+    white-space: pre-line;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<div id="loadingNotice">載入中，請稍候...</div>
+
+<div class="wrap" id="mainContent" style="display:none;">
+
+  <div class="header-card">
+    <h1><img class="title-logo-icon" src="logo-icon.jpg" alt="護法會雲端系統"><span>提示單查詢</span></h1>
+    <div class="session-line">目前場次：<span id="sessionNameShow"></span></div>
+  </div>
+
+  <div class="card" id="cardQuery">
+    <label for="inputStudentId">請輸入學員編號或姓名</label>
+    <input type="text" id="inputStudentId" autocomplete="off" inputmode="text" placeholder="輸入後按 Enter 或送出">
+    <button class="big-action" id="btnSearch" onclick="處理查詢按鈕點擊()">查詢</button>
+  </div>
+
+  <div class="card" id="cardResult" style="display:none;">
+    <div class="msg" id="msgResult"></div>
+    <div class="candidate-list" id="candidateList"></div>
+  </div>
+
+  <div class="card" id="cardSlip" style="display:none;">
+    <div class="slip-serial"><span id="slipSerial"></span></div>
+    <div class="slip-name">
+      <span class="slip-name-main" id="slipNameMain"></span><span class="slip-name-dharma" id="slipNameDharma"></span>
+    </div>
+    <div class="slip-seatgroup">入座組別：<strong id="slipSeatGroup"></strong></div>
+    <div class="slip-wave-title">上台波次</div>
+    <table class="slip-wave-table">
+      <thead><tr><th>波次</th><th>組別</th></tr></thead>
+      <tbody id="slipWaveBody"></tbody>
+    </table>
+    <div class="slip-wave-empty" id="slipWaveEmpty" style="display:none;">本場次尚未設定波次對照資料</div>
+    <div class="slip-notice" id="slipNotice" style="display:none;"></div>
+  </div>
+
+</div>
+
+<script src="config.js"></script>
+<script>
+
+/**
+ * ------------------------------------------------------------
+ * 函式：取得網址參數
+ * 版本：v1.0（2026-10-03，沿用 checkin.html 的做法）
+ * 用途：從目前網址的查詢字串中取出指定參數值。
+ * 參數：
+ *   strKey - 參數名稱
+ * 回傳：str 參數值，找不到時回傳空字串
+ * ------------------------------------------------------------
+ */
+function 取得網址參數(strKey) {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(strKey) || "";
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：顯示區塊訊息
+ * 版本：v1.0（2026-10-03，沿用 checkin.html 的做法）
+ * 用途：在指定的訊息區塊顯示提示、成功或錯誤訊息。
+ * 參數：
+ *   strMsgElementId - 要顯示訊息的元素 id
+ *   str訊息內容      - 顯示的文字
+ *   str樣式           - "error" / "success" / "info" 三選一
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 顯示區塊訊息(strMsgElementId, str訊息內容, str樣式) {
+  const elMsg = document.getElementById(strMsgElementId);
+  elMsg.textContent = str訊息內容;
+  elMsg.className = "msg " + str樣式;
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：清空候選清單
+ * 版本：v1.0（2026-10-03，沿用 checkin.html 的做法）
+ * 用途：每次重新查詢前，先清空上一次顯示的同名同姓候選清單按鈕。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 清空候選清單() {
+  document.getElementById("candidateList").innerHTML = "";
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：清空提示單
+ * 版本：v1.0（2026-10-03，沿用 checkin.html 的做法）
+ * 用途：每次重新查詢前，先把上一次顯示的提示單隱藏並清空內容。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 清空提示單() {
+  document.getElementById("cardSlip").style.display = "none";
+  document.getElementById("slipWaveBody").innerHTML = "";
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：顯示提示單
+ * 版本：v1.0（2026-10-03，沿用 checkin.html 的做法）
+ * 用途：把後端回傳的提示單資料畫到 #cardSlip 卡片上並顯示出來。
+ * 參數：
+ *   objResult - 後端回傳的結果物件，需包含 序號、姓名、法名、
+ *               入座組別、上台波次清單（陣列）、提示單說明文字
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 顯示提示單(objResult) {
+  document.getElementById("slipSerial").textContent = objResult.序號 ? "序號 " + objResult.序號 : "";
+  document.getElementById("slipNameMain").textContent = objResult.姓名 || "";
+  document.getElementById("slipNameDharma").textContent = objResult.法名 || "";
+  document.getElementById("slipSeatGroup").textContent = objResult.入座組別 || "（未設定）";
+
+  const elWaveBody = document.getElementById("slipWaveBody");
+  const elWaveEmpty = document.getElementById("slipWaveEmpty");
+  elWaveBody.innerHTML = "";
+
+  const arr上台波次清單 = objResult.上台波次清單 || [];
+  if (arr上台波次清單.length === 0) {
+    elWaveEmpty.style.display = "block";
+  } else {
+    elWaveEmpty.style.display = "none";
+    arr上台波次清單.forEach(function (obj一筆) {
+      const elTr = document.createElement("tr");
+      elTr.innerHTML = '<td class="slip-wave-num"></td><td class="slip-wave-group"></td>';
+      elTr.children[0].textContent = obj一筆.波次;
+      elTr.children[1].textContent = obj一筆.組別;
+      elWaveBody.appendChild(elTr);
+    });
+  }
+
+  const elNotice = document.getElementById("slipNotice");
+  if (objResult.提示單說明文字) {
+    elNotice.textContent = objResult.提示單說明文字;
+    elNotice.style.display = "block";
+  } else {
+    elNotice.style.display = "none";
+  }
+
+  document.getElementById("cardSlip").style.display = "block";
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：顯示候選清單
+ * 版本：v1.0（2026-10-03，沿用 checkin.html 的做法，差別在點選後
+ *       呼叫「送出查詢」而不是「送出報到」，本頁純查詢不寫入資料）
+ * 參數：
+ *   arr候選清單 - 陣列，每筆為 { 學員編號, 姓名, 法名 }
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 顯示候選清單(arr候選清單) {
+  const elList = document.getElementById("candidateList");
+  elList.innerHTML = "";
+
+  arr候選清單.forEach(function (obj候選) {
+    const elButton = document.createElement("button");
+    elButton.type = "button";
+    elButton.className = "candidate-item";
+    elButton.textContent = obj候選.姓名 + (obj候選.法名 ? "（" + obj候選.法名 + "）" : "");
+    elButton.onclick = function () {
+      Array.prototype.forEach.call(elList.querySelectorAll(".candidate-item"), function (el) {
+        el.disabled = true;
+      });
+      送出查詢(String(obj候選.學員編號));
+    };
+    elList.appendChild(elButton);
+  });
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：送出查詢
+ * 版本：v1.0（2026-10-03，法師訪談決議，提示單自查功能）
+ * 用途：呼叫後端「查詢學員提示單」action（唯讀，不會寫入任何報到
+ *       紀錄），依回傳結果決定畫面呈現：
+ *         - 已報到（成功）→ 顯示提示單；
+ *         - 查到同名同姓多筆（類型="同名同姓待選"）→ 顯示候選清單
+ *           讓使用者點選其中一位；
+ *         - 尚未報到（類型="尚未報到"）→ 顯示「尚未報到，請先到
+ *           現場報到」提示，不顯示提示單；
+ *         - 查無此人／場次不存在等其他情況 → 顯示對應錯誤訊息。
+ * 參數：
+ *   str輸入內容 - 學員編號或姓名（來自輸入框，或候選清單點選的
+ *                 學員編號）
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+async function 送出查詢(str輸入內容) {
+  document.getElementById("cardResult").style.display = "block";
+  清空候選清單();
+  清空提示單();
+
+  const btn查詢按鈕 = document.getElementById("btnSearch");
+  btn查詢按鈕.disabled = true;
+  顯示區塊訊息("msgResult", "查詢中，請稍候...", "info");
+
+  try {
+    const objResult = await 呼叫後端API({
+      system: "現場報到",
+      action: "查詢學員提示單",
+      精舍代碼: 取得網址參數("temple"),
+      場次代碼: 取得網址參數("session"),
+      學員編號: str輸入內容
+    });
+
+    if (objResult.成功) {
+      顯示區塊訊息("msgResult", "✓ 查詢成功！", "success");
+      顯示提示單(objResult);
+      return;
+    }
+
+    if (objResult.類型 === "同名同姓待選") {
+      顯示區塊訊息("msgResult", objResult.訊息, "info");
+      顯示候選清單(objResult.候選清單 || []);
+      return;
+    }
+
+    if (objResult.類型 === "尚未報到") {
+      顯示區塊訊息("msgResult", objResult.訊息 || "尚未報到，請先到現場報到。", "error");
+      return;
+    }
+
+    // 其他情況一律視為查詢失敗（查無此人／場次不存在等）
+    顯示區塊訊息("msgResult", objResult.訊息 || "查詢失敗，請確認輸入是否正確。", "error");
+  } catch (錯誤) {
+    console.error("送出查詢時發生未預期錯誤：", 錯誤);
+    顯示區塊訊息("msgResult", "系統發生未預期錯誤，請稍後再試一次。", "error");
+  } finally {
+    btn查詢按鈕.disabled = false;
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理查詢按鈕點擊
+ * 版本：v1.0（2026-10-03，沿用 checkin.html 的做法）
+ * 用途：讀取畫面上輸入的學員編號或姓名，做基本的空白檢查後，
+ *       呼叫「送出查詢」。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+function 處理查詢按鈕點擊() {
+  const str輸入內容 = document.getElementById("inputStudentId").value.trim();
+
+  if (!str輸入內容) {
+    document.getElementById("cardResult").style.display = "block";
+    清空候選清單();
+    清空提示單();
+    顯示區塊訊息("msgResult", "請輸入學員編號或姓名。", "error");
+    return;
+  }
+
+  送出查詢(str輸入內容);
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：初始化頁面
+ * 版本：v1.0（2026-10-03，法師訪談決議，提示單自查功能）
+ * 用途：頁面載入時執行，檢查網址參數是否齊全，並呼叫「查詢場次
+ *       公開資訊」取得場次名稱，顯示在畫面上方。不檢查場次是否
+ *       已結束——已結束的場次，報到過的人仍然應該能查到自己的
+ *       提示單內容（這份資料是給典禮當下使用的，跟「是否還開放
+ *       現場報到」是兩回事）。
+ * 參數：無
+ * 回傳：無
+ * ------------------------------------------------------------
+ */
+async function 初始化頁面() {
+  const str精舍代碼 = 取得網址參數("temple");
+  const str場次代碼 = 取得網址參數("session");
+
+  if (!str精舍代碼 || !str場次代碼) {
+    document.getElementById("loadingNotice").textContent =
+      "網址參數不完整，請確認連結是否正確（應包含 ?temple=...&session=...），或洽現場工作人員協助。";
+    return;
+  }
+
+  try {
+    const objResult = await 呼叫後端API({
+      system: "現場報到",
+      action: "查詢場次公開資訊",
+      精舍代碼: str精舍代碼,
+      場次代碼: str場次代碼
+    });
+
+    if (!objResult.成功) {
+      document.getElementById("loadingNotice").textContent =
+        objResult.訊息 || "無法載入場次資訊，請洽現場工作人員協助。";
+      return;
+    }
+
+    document.getElementById("sessionNameShow").textContent = objResult.場次名稱;
+
+    document.getElementById("loadingNotice").style.display = "none";
+    document.getElementById("mainContent").style.display = "block";
+
+    document.getElementById("inputStudentId").focus();
+    document.getElementById("inputStudentId").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (!document.getElementById("btnSearch").disabled) {
+          處理查詢按鈕點擊();
+        }
+      }
+    });
+  } catch (錯誤) {
+    console.error("載入場次公開資訊時發生錯誤：", 錯誤);
+    document.getElementById("loadingNotice").textContent =
+      "載入時發生未預期錯誤，請重新整理頁面再試一次，或洽現場工作人員協助。";
+  }
+}
+
+初始化頁面();
+
+</script>
+
+</body>
+</html>
