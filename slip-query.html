@@ -8,7 +8,28 @@
   /*
    * ============================================================
    * 檔案：報到者提示單自查頁（模組4附屬頁面）
-   * 版本：v1.0（2026-10-03，法師訪談決議，提示單自查功能）
+   * 版本：v1.1（2026-10-03，法師訪談決議：「提示單自查頁規格 比照
+   *       報到的提示單規格」）
+   * 版本歷程：
+   *   v1.1（2026-10-03）：同步套用 checkin.html 現場報到頁提示單
+   *     卡片（#cardSlip）v2.10／v2.11 的所有樣式調整，讓自查頁跟
+   *     現場報到頁看到的提示單規格完全一致：
+   *     (1) 「入座組別」組別名稱（.slip-seatgroup strong）加大加粗
+   *         到 28px。
+   *     (2) 「上台波次」表格「波次」數字（.slip-wave-table
+   *         td.slip-wave-num）從 24px 加大到 34px（維持粗體）。
+   *     (3) 「上台波次」表格「組別」文字（.slip-wave-table
+   *         td.slip-wave-group）從 15px 加大到跟「波次」數字一樣
+   *         的 34px（不加粗）。
+   *     (4) 說明文字前面固定加上「＊說明：」標題（新增
+   *         .slip-notice-title／#slipNoticeText，JS 改寫入這個
+   *         子元素，不再直接寫 #slipNotice 本身）。
+   *     (5) 拿掉說明文字跟上方表格之間的虛線分隔線（.slip-notice
+   *         的 border-top: dashed）。
+   *     (6) 提示單卡片（#cardSlip）尺寸固定為 B5 的 1/4
+   *         （88mm×125mm）。
+   *     純 CSS／HTML／JS 微調，不影響查詢邏輯或任何後端 action。
+   *   v1.0（2026-10-03，法師訪談決議，提示單自查功能）：初版。
    * 說明：
    *   公開頁面，不需要登入密碼（比照 checkin.html 現場報到頁的
    *   公開原則，2026-09-16 訪談確認的精神延伸），已經報到過的
@@ -150,10 +171,19 @@
   }
 
   /* 提示單卡片，樣式與 checkin.html 的 #cardSlip 一致，方便報到者
-     感覺是同一套系統（詳見 checkin.html v2.9 版本說明） */
+     感覺是同一套系統（詳見 checkin.html v2.9 版本說明；2026-10-03
+     法師訪談決議：「提示單自查頁規格 比照 報到的提示單規格」，
+     本檔案 v1.1 同步套用 checkin.html v2.10／v2.11 的所有調整，
+     逐條對照見下方各規則的註解） */
   #cardSlip.card {
     background: var(--color-confirm-profile-bg);
     border: 2px solid var(--color-accent);
+    width: 88mm;
+    min-height: 125mm;
+    box-sizing: border-box;
+    margin-left: auto;
+    margin-right: auto;
+    overflow-y: auto;
   }
   .slip-serial {
     text-align: right;
@@ -181,6 +211,8 @@
     color: var(--color-title);
   }
   .slip-seatgroup strong {
+    font-size: 28px;
+    font-weight: bold;
     color: var(--color-accent);
   }
   .slip-wave-title {
@@ -205,12 +237,12 @@
     font-size: 13px;
   }
   .slip-wave-table td.slip-wave-num {
-    font-size: 24px;
+    font-size: 34px;
     font-weight: bold;
     color: var(--color-accent);
   }
   .slip-wave-table td.slip-wave-group {
-    font-size: 15px;
+    font-size: 34px;
     color: var(--color-title);
   }
   .slip-wave-empty {
@@ -222,11 +254,15 @@
   .slip-notice {
     margin-top: 14px;
     padding-top: 10px;
-    border-top: 1px dashed var(--color-card-border);
     font-size: 13px;
     color: var(--color-subtitle);
     white-space: pre-line;
     line-height: 1.6;
+  }
+  .slip-notice-title {
+    font-weight: bold;
+    color: var(--color-title);
+    margin-bottom: 2px;
   }
 </style>
 </head>
@@ -264,7 +300,10 @@
       <tbody id="slipWaveBody"></tbody>
     </table>
     <div class="slip-wave-empty" id="slipWaveEmpty" style="display:none;">本場次尚未設定波次對照資料</div>
-    <div class="slip-notice" id="slipNotice" style="display:none;"></div>
+    <div class="slip-notice" id="slipNotice" style="display:none;">
+      <div class="slip-notice-title">＊說明：</div>
+      <div id="slipNoticeText"></div>
+    </div>
   </div>
 
 </div>
@@ -368,8 +407,9 @@ function 顯示提示單(objResult) {
   }
 
   const elNotice = document.getElementById("slipNotice");
+  const elNoticeText = document.getElementById("slipNoticeText");
   if (objResult.提示單說明文字) {
-    elNotice.textContent = objResult.提示單說明文字;
+    elNoticeText.textContent = objResult.提示單說明文字;
     elNotice.style.display = "block";
   } else {
     elNotice.style.display = "none";
