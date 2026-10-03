@@ -6,12 +6,32 @@
 <title>護法會雲端系統 - 報到場次管理</title>
 <!-- SheetJS：供「下載名單」按鈕把某場次出席名單匯出成 .xlsx 使用（2026-09-20 新增） -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- ExcelJS：供「下載簽到表」按鈕產生有邊框／字型顏色／B5頁面設定的
+     .xlsx 使用（2026-10-03 新增）。SheetJS 的免費版本不支援寫入儲存格
+     樣式（框線／字型顏色／頁面設定／頁首頁尾），無法做出簽到表需要的
+     列印版面，改用同樣是開源、但支援完整樣式與頁面設定的 ExcelJS。
+     既有「下載名單」功能仍用原本的 SheetJS，兩套各自獨立、互不影響。 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
   /*
    * ============================================================
    * 檔案：報到系統場次管理頁面
-   * 版本：v1.2（2026-09-24）
+   * 版本：v1.3（2026-10-03，法師訪談決議：「產生報到簽到表，B5尺寸」）
    * 版本歷程：
+   *   v1.3（2026-10-03，法師訪談確認：資料來源用報到系統的場次出席
+   *     名單、依姓名筆畫/注音排序、輸出 Excel 檔案、B5 直放並排
+   *     兩組「序號/組別/姓名/簽到」表格）：場次清單每一列新增
+   *     「下載簽到表(B5)」按鈕（處理下載簽到表按鈕點擊），沿用既有
+   *     「查詢場次出席名單」API 取得名單，依姓名筆畫排序後（依姓名
+   *     筆畫排序，用 Intl.Collator 的 zh-Hant-u-co-stroke 地區
+   *     設定），用新引入的 ExcelJS（既有「下載名單」用的 SheetJS
+   *     免費版不支援寫入儲存格樣式與頁面設定，改用同樣開源但支援
+   *     完整樣式／B5頁面設定／頁首頁尾的 ExcelJS）產生一份多工作表
+   *     的 .xlsx，一個工作表對應一個實際列印頁面（每頁 48 人，分
+   *     左右兩欄各 24 人），頁尾用 Excel 內建代碼顯示「第X頁，共Y
+   *     頁」（列印時需選「整本活頁簿」，頁碼才會跨工作表正確累計，
+   *     已在函式註解與交付時提醒資料組）。純前端新增功能，不需要
+   *     新增或修改任何後端 action。
    *   v1.2（2026-09-24，法師確認「卡片式改成索引式」）：操作介面
    *     由「2 張卡片全部堆疊在同一頁、往下捲動」改為「畫面上方
    *     橫向分頁籤（Tab）」，2 個分頁對應原本的 2 張卡片：建立新
@@ -233,6 +253,18 @@
     cursor: pointer;
   }
   .btn-download:hover { background: #1f3c6e; }
+  /* 【2026-10-03 新增】「下載簽到表」按鈕，用不同顏色（深綠）跟
+     「下載名單」「刪除」區隔，避免資料組點錯 */
+  .btn-signsheet {
+    background: #3F6B2E;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .btn-signsheet:hover { background: #2e5020; }
   .empty-hint {
     color: #999;
     font-size: 13px;
@@ -568,6 +600,8 @@ function 組出場次清單表格HTML(arr場次清單) {
       "<td>" +
         "<button class='btn-download' onclick=\"處理下載出席名單按鈕點擊('" +
           轉義單引號(obj場次.場次代碼) + "', '" + 轉義單引號(obj場次.場次名稱) + "')\">下載名單</button> " +
+        "<button class='btn-signsheet' onclick=\"處理下載簽到表按鈕點擊('" +
+          轉義單引號(obj場次.場次代碼) + "', '" + 轉義單引號(obj場次.場次名稱) + "')\">下載簽到表(B5)</button> " +
         "<button class='btn-delete' onclick=\"處理刪除場次按鈕點擊('" + 轉義單引號(obj場次.場次代碼) + "')\">刪除</button>" +
       "</td>" +
       "</tr>";
@@ -779,6 +813,225 @@ async function 處理下載出席名單按鈕點擊(str場次代碼, str場次�
   } catch (錯誤) {
     console.error("下載出席名單時發生未預期錯誤：", 錯誤);
     window.alert("下載時發生未預期錯誤，請稍後再試或聯絡工程人員。");
+  }
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：依姓名筆畫排序
+ * 版本：v1.0（2026-10-03，法師訪談決議，簽到表功能新增）
+ * 用途：把名單依「姓名」欄位用中文筆畫順序排序，供「下載簽到表」
+ *       使用（法師訪談決議排序方式：依姓名筆畫/注音排序）。瀏覽器
+ *       的 Intl.Collator 支援 "zh-Hant-u-co-stroke"（繁體中文筆畫
+ *       排序）這個地區設定；萬一使用者瀏覽器版本太舊不支援這個
+ *       排序規則（極少數情況），改用一般的繁體中文排序規則，順序
+ *       可能跟標準筆畫順序略有落差，但不會整個排序失敗。
+ * 參數：
+ *   arr名單 - 名單陣列，每筆物件需含「姓名」欄位
+ * 回傳：arr 排序後的新陣列（不修改原陣列）
+ * ------------------------------------------------------------
+ */
+function 依姓名筆畫排序(arr名單) {
+  var collator;
+  try {
+    collator = new Intl.Collator("zh-Hant-u-co-stroke", { usage: "sort", sensitivity: "base" });
+  } catch (錯誤) {
+    collator = new Intl.Collator("zh-Hant");
+  }
+  return arr名單.slice().sort(function (a, b) {
+    return collator.compare(String((a && a.姓名) || ""), String((b && b.姓名) || ""));
+  });
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：細框線
+ * 版本：v1.0（2026-10-03，法師訪談決議，簽到表功能新增）
+ * 用途：「下載簽到表」共用的儲存格邊框樣式小工具，避免每個儲存格
+ *       都要重複寫一樣的四邊框線設定。
+ * 回傳：obj，可直接指派給 ExcelJS 儲存格的 border 屬性
+ * ------------------------------------------------------------
+ */
+function 細框線() {
+  var obj邊框樣式 = { style: "thin", color: { argb: "FFB0B0B0" } };
+  return { top: obj邊框樣式, left: obj邊框樣式, bottom: obj邊框樣式, right: obj邊框樣式 };
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：產生簽到表Excel並下載
+ * 版本：v1.0（2026-10-03，法師訪談決議：「產生報到簽到表，B5尺寸」，
+ *       訪談確認：資料來源用報到系統的場次出席名單、依姓名筆畫/
+ *       注音排序、輸出 Excel 檔案、B5 直放並排兩組「序號/組別/
+ *       姓名/簽到」表格，排版比照法師提供的範例圖）
+ * 用途：把已經排序好的出席名單，每 48 人一頁（每頁分左右兩欄，
+ *       每欄 24 人），用 ExcelJS 產生一份多工作表的 .xlsx 檔案
+ *       （一個工作表＝一個實際列印頁面），每個工作表都設定好 B5
+ *       直向、縮放至 1 頁寬高的頁面設定，並用 Excel 內建的頁尾
+ *       欄位代碼「&P（目前頁）/&N（總頁數）」顯示「第X頁，共Y頁」
+ *       （列印「整本活頁簿」時，Excel 會自動依序編號、算出正確的
+ *       總頁數，比自己寫死頁碼更不容易出錯；只印單一工作表時，
+ *       &N 只會算這一頁，所以務必提醒資料組用「列印整本活頁簿」）。
+ *       序號是這份簽到表重新流水編號（1、2、3...依排序後順序），
+ *       不是原始出席名單裡的序號，方便報到者現場核對。
+ *       ExcelJS 支援完整的儲存格樣式（框線／字型顏色）與頁面設定
+ *       （紙張大小／頁首頁尾），這是改用 ExcelJS 而非既有「下載
+ *       名單」用的 SheetJS 的原因（SheetJS 免費版不支援寫入樣式）。
+ *       B5 說明：Excel 內建紙張大小沒有獨立的 ISO B5（176×250mm）
+ *       選項，這裡使用最接近的「B5 (JIS)」（182×257mm，相差僅幾
+ *       毫米），多數印表機的 B5 紙匣用這個設定列印不會有實際問題；
+ *       若印表機支援自訂紙張，資料組也可以在列印時自行調整。
+ * 參數：
+ *   arr已排序名單 - 依姓名筆畫排序過的出席名單陣列（元素需含
+ *                   姓名／組別）
+ *   str檔名       - 下載的檔案名稱（不含副檔名，會自動加上 .xlsx）
+ * 回傳：Promise（無回傳值，直接觸發瀏覽器下載）
+ * ------------------------------------------------------------
+ */
+async function 產生簽到表Excel並下載(arr已排序名單, str檔名) {
+  var INT_每頁人數 = 48;
+  var INT_每頁每欄人數 = 24; // 每頁分兩欄，每欄 24 人（比照法師提供的範例圖）
+
+  var 活頁簿 = new ExcelJS.Workbook();
+  var int總頁數 = Math.ceil(arr已排序名單.length / INT_每頁人數);
+
+  for (var intPage = 0; intPage < int總頁數; intPage++) {
+    var 工作表 = 活頁簿.addWorksheet("第" + (intPage + 1) + "頁");
+
+    工作表.columns = [
+      { width: 6 }, { width: 11 }, { width: 11 }, { width: 14 },
+      { width: 3 },
+      { width: 6 }, { width: 11 }, { width: 11 }, { width: 14 }
+    ];
+    工作表.pageSetup = {
+      paperSize: 13, // B5 (JIS) 182x257mm，Excel 內建紙張清單裡最接近 ISO B5 的選項
+      orientation: "portrait",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 1,
+      horizontalCentered: true,
+      margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 }
+    };
+    工作表.headerFooter = {
+      oddFooter: "&C第 &P 頁，共 &N 頁",
+      evenFooter: "&C第 &P 頁，共 &N 頁"
+    };
+
+    var 標題列 = 工作表.addRow(["序號", "組別", "姓名", "簽到", "", "序號", "組別", "姓名", "簽到"]);
+    標題列.eachCell(function (cell, intColNumber) {
+      if (intColNumber === 5) { return; } // 第 5 欄是左右兩張表中間的間隔欄，不設定樣式
+      cell.font = { bold: true, color: { argb: "FF1F4E78" } };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.border = 細框線();
+    });
+    標題列.height = 20;
+
+    var int起始序號 = intPage * INT_每頁人數 + 1;
+    for (var intRow = 0; intRow < INT_每頁每欄人數; intRow++) {
+      var int左序號 = int起始序號 + intRow;
+      var int右序號 = int起始序號 + INT_每頁每欄人數 + intRow;
+      var obj左 = arr已排序名單[int左序號 - 1];
+      var obj右 = arr已排序名單[int右序號 - 1];
+
+      // 這個場次人數不是 48 的倍數時，最後一頁會有左欄或右欄沒有
+      // 資料的情況，沒有資料的半邊維持完全空白（不畫框線），讓
+      // 現場人員一看就知道名單到哪裡結束
+      if (!obj左 && !obj右) { continue; }
+
+      var 資料列 = 工作表.addRow([
+        obj左 ? int左序號 : "",
+        obj左 ? obj左.組別 : "",
+        obj左 ? obj左.姓名 : "",
+        "",
+        "",
+        obj右 ? int右序號 : "",
+        obj右 ? obj右.組別 : "",
+        obj右 ? obj右.姓名 : "",
+        ""
+      ]);
+      資料列.height = 20;
+
+      [1, 2, 3, 4].forEach(function (intColNumber) {
+        if (!obj左) { return; }
+        var cell = 資料列.getCell(intColNumber);
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = 細框線();
+        if (intColNumber === 1) { cell.font = { color: { argb: "FF2E5395" } }; }       // 序號：藍色
+        else if (intColNumber === 2) { cell.font = { color: { argb: "FFC45911" } }; }  // 組別：橙色
+        else if (intColNumber === 3) { cell.font = { color: { argb: "FF1F3864" } }; }  // 姓名：深藍色
+      });
+      [6, 7, 8, 9].forEach(function (intColNumber) {
+        if (!obj右) { return; }
+        var cell = 資料列.getCell(intColNumber);
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = 細框線();
+        if (intColNumber === 6) { cell.font = { color: { argb: "FF2E5395" } }; }
+        else if (intColNumber === 7) { cell.font = { color: { argb: "FFC45911" } }; }
+        else if (intColNumber === 8) { cell.font = { color: { argb: "FF1F3864" } }; }
+      });
+    }
+  }
+
+  var arrBuffer = await 活頁簿.xlsx.writeBuffer();
+  var blob = new Blob([arrBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  var strURL = URL.createObjectURL(blob);
+  var elA = document.createElement("a");
+  elA.href = strURL;
+  elA.download = str檔名 + ".xlsx";
+  document.body.appendChild(elA);
+  elA.click();
+  document.body.removeChild(elA);
+  URL.revokeObjectURL(strURL);
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：處理下載簽到表按鈕點擊
+ * 版本：v1.0（2026-10-03，法師訪談決議，簽到表功能新增）
+ * 用途：呼叫既有的「查詢場次出席名單」API（跟「下載名單」共用同一
+ *       支 API，不需要新增後端功能），取得該場次完整出席名單後，
+ *       依姓名筆畫排序，再用「產生簽到表Excel並下載」輸出成可直接
+ *       列印的 B5 簽到表 .xlsx 檔案。
+ * 參數：
+ *   str場次代碼 - 要下載簽到表的場次代碼
+ *   str場次名稱 - 該場次名稱（用於組檔名，可能為空）
+ * ------------------------------------------------------------
+ */
+async function 處理下載簽到表按鈕點擊(str場次代碼, str場次名稱) {
+  const obj登入資訊 = 取得目前登入精舍資訊();
+  if (!obj登入資訊) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  if (typeof ExcelJS === "undefined") {
+    window.alert("匯出簽到表的元件載入失敗，請確認網路連線正常後重新整理頁面再試一次。");
+    return;
+  }
+
+  try {
+    const objResult = await 呼叫後端API({
+      system: "報到",
+      action: "查詢場次出席名單",
+      token: obj登入資訊.token,
+      場次代碼: str場次代碼
+    });
+
+    if (!objResult.成功) {
+      window.alert(objResult.訊息 || "查詢出席名單失敗，請稍後再試。");
+      return;
+    }
+    if (!objResult.出席名單 || objResult.出席名單.length === 0) {
+      window.alert("這個場次目前沒有出席名單資料，不需要下載簽到表。");
+      return;
+    }
+
+    const arr已排序名單 = 依姓名筆畫排序(objResult.出席名單);
+    const str檔名 = str場次代碼 + (str場次名稱 ? "_" + str場次名稱 : "") + "_簽到表";
+    await 產生簽到表Excel並下載(arr已排序名單, str檔名);
+  } catch (錯誤) {
+    console.error("下載簽到表時發生未預期錯誤：", 錯誤);
+    window.alert("下載簽到表時發生未預期錯誤，請稍後再試或聯絡工程人員。");
   }
 }
 
