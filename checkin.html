@@ -12,8 +12,20 @@
   /*
    * ============================================================
    * 檔案：現場報到掃碼頁（模組4）
-   * 版本：v2.9（2026-10-03，法師訪談決議，新增「提示單」功能）
+   * 版本：v2.10（2026-10-03，法師看提示單畫面截圖標註決議：文字加大加粗）
    * 版本歷程：
+   *   - v2.10（2026-10-03，法師看實際列印出來的提示單畫面截圖後，
+   *     手寫標註決議）：三處文字加大（兩處順便加粗），方便現場
+   *     報到者站遠一點也看得清楚：
+   *     (1) 「入座組別」的組別名稱（.slip-seatgroup strong）從跟隨
+   *         外層 18px，改成獨立 28px、粗體。
+   *     (2) 「上台波次」表格「波次」欄位數字（.slip-wave-table
+   *         td.slip-wave-num）從 24px 加大到 34px（原本就是粗體，
+   *         維持不變）。
+   *     (3) 「上台波次」表格「組別」欄位文字（.slip-wave-table
+   *         td.slip-wave-group）從 15px 加大到 20px（法師標註只要
+   *         加大，沒有要求加粗，維持原本非粗體）。
+   *     純 CSS 調整，不影響任何資料邏輯或函式。
    *   - v2.9（2026-10-03）：頒證典禮各組會分不同波次上台領證合影，
    *     報到成功後，除了原本的報到結果訊息，新增顯示一張「提示單」
    *     卡片（#cardSlip），告訴報到者「入座組別」與「上台波次」，
@@ -385,7 +397,10 @@
     margin-top: 10px;
     color: var(--color-title);
   }
+  /* 【2026-10-03 法師畫面標註決議：「入座組別」文字加大加粗】 */
   .slip-seatgroup strong {
+    font-size: 28px;
+    font-weight: bold;
     color: var(--color-accent);
   }
   .slip-wave-title {
@@ -409,13 +424,15 @@
     color: var(--color-subtitle);
     font-size: 13px;
   }
+  /* 【2026-10-03 法師畫面標註決議：「波次」數字文字加大加粗，
+     「組別」文字加大（不加粗）】 */
   .slip-wave-table td.slip-wave-num {
-    font-size: 24px;
+    font-size: 34px;
     font-weight: bold;
     color: var(--color-accent);
   }
   .slip-wave-table td.slip-wave-group {
-    font-size: 15px;
+    font-size: 20px;
     color: var(--color-title);
   }
   .slip-wave-empty {
