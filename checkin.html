@@ -478,10 +478,13 @@
     margin-top: 8px;
   }
   /* 【2026-10-03 法師畫面標註決議：「取消虛線」】拿掉原本跟上方
-     表格之間的虛線分隔（border-top: dashed），改用間距區隔即可。 */
+     表格之間的虛線分隔（border-top: dashed），改用間距區隔即可。
+     【2026-10-04 法師畫面標註決議：「不留空間」】原本 margin-top:
+     14px + padding-top:10px 在「*說明:」上方留了一大段空白，拿掉
+     虛線之後這段間距已經沒有意義，改成只用很小的間距跟上方表格
+     區隔即可，不再留一大塊空白。 */
   .slip-notice {
-    margin-top: 14px;
-    padding-top: 10px;
+    margin-top: 6px;
     font-size: 13px;
     color: var(--color-subtitle);
     white-space: pre-line;
