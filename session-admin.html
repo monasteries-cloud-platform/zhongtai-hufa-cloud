@@ -860,6 +860,23 @@ function 細框線() {
 /**
  * ------------------------------------------------------------
  * 函式：產生簽到表Excel並下載
+ * 版本：v3.0（2026-10-04，法師提供精確版面規格，直接採用法師指定的
+ *       數值，不再用程式反算：
+ *       - 欄寬（字元數）：序號 4.78、組別 13.67、姓名 12.22、
+ *         簽到 8、兩組中間空白欄 0.8（左右兩組共 9 欄，比照
+ *         範例圖排列）
+ *       - 列高：所有列（標題列＋資料列）統一 24
+ *       - 頁面邊界：上 0.5、下 0.5、左 0.5、右 0.5（英吋）
+ *       - 字型全部使用「微軟正黑體」，顏色統一改為黑色（法師：
+ *         「黑色字」，取消先前版本的藍／橙／深藍配色）
+ *       - 字級：欄位名稱（標題列）14 級、序號欄 13 級、組別欄
+ *         15 級、姓名欄 17 級（法師逐欄指定；「簽到」欄位本身
+ *         空白供現場簽名，法師未指定字級，沿用跟序號欄一致的
+ *         13 級以維持整體協調）
+ *       - 版面既然由法師直接指定精確的欄寬／列高／邊界，就不再
+ *         用「縮放至 1 頁寬高」讓 Excel 自動縮放（否則法師算好的
+ *         欄寬列高會被縮放比例打亂），改成 scale:100 完全依照
+ *         設定的數值列印
  * 版本：v2.0（2026-10-04，法師畫面標註決議：
  *       (1)「1頁50筆資料」：每頁人數從 48 改為 50（每欄 25 人，
  *           左右兩欄共 50 人），不再是 48；
@@ -904,9 +921,10 @@ function 細框線() {
 async function 產生簽到表Excel並下載(arr已排序名單, str檔名) {
   var INT_每頁人數 = 50;
   var INT_每頁每欄人數 = 25; // 每頁分兩欄，每欄 25 人（2026-10-04 法師標註：1頁50筆資料）
-  var STR_字型名稱 = "微軟正黑體"; // 2026-10-04 法師標註：文字使用微軟正黑體
-  var INT_標題列高 = 26; // 配合放大字級與「字放大、均分滿版」的標註，加大列高
-  var INT_資料列高 = 25; // 標題列(26)+25筆資料列(25)≈651pt，貼近 B5(JIS) 扣除上下邊界後的可印刷高度(約657pt)
+  var STR_字型名稱 = "微軟正黑體"; // 法師指定：文字使用微軟正黑體
+  var STR_字體顏色 = "FF000000"; // 法師指定：黑色字
+  var INT_統一列高 = 24; // 法師指定：行高 24（標題列與資料列統一）
+  var OBJ_字級 = { 欄位名稱: 14, 序號: 13, 組別: 15, 姓名: 17, 簽到: 13 }; // 法師逐欄指定字級；「簽到」欄未特別指定，沿用序號欄的 13 級
 
   var 活頁簿 = new ExcelJS.Workbook();
   var int總頁數 = Math.ceil(arr已排序名單.length / INT_每頁人數);
@@ -914,19 +932,19 @@ async function 產生簽到表Excel並下載(arr已排序名單, str檔名) {
   for (var intPage = 0; intPage < int總頁數; intPage++) {
     var 工作表 = 活頁簿.addWorksheet("第" + (intPage + 1) + "頁");
 
+    // 法師指定欄寬（字元數）：序號 4.78、組別 13.67、姓名 12.22、
+    // 簽到 8、兩組中間空白欄 0.8
     工作表.columns = [
-      { width: 6 }, { width: 11 }, { width: 11 }, { width: 14 },
-      { width: 3 },
-      { width: 6 }, { width: 11 }, { width: 11 }, { width: 14 }
+      { width: 4.78 }, { width: 13.67 }, { width: 12.22 }, { width: 8 },
+      { width: 0.8 },
+      { width: 4.78 }, { width: 13.67 }, { width: 12.22 }, { width: 8 }
     ];
     工作表.pageSetup = {
       paperSize: 13, // B5 (JIS) 182x257mm，Excel 內建紙張清單裡最接近 ISO B5 的選項
       orientation: "portrait",
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 1,
+      scale: 100, // 法師已直接指定精確欄寬/列高/邊界，不再用自動縮放，避免打亂法師算好的版面
       horizontalCentered: true,
-      margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 }
+      margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } // 法師指定：上下左右邊界皆 0.5
     };
     工作表.headerFooter = {
       oddFooter: "&C第 &P 頁，共 &N 頁",
@@ -936,11 +954,11 @@ async function 產生簽到表Excel並下載(arr已排序名單, str檔名) {
     var 標題列 = 工作表.addRow(["序號", "組別", "姓名", "簽到", "", "序號", "組別", "姓名", "簽到"]);
     標題列.eachCell(function (cell, intColNumber) {
       if (intColNumber === 5) { return; } // 第 5 欄是左右兩張表中間的間隔欄，不設定樣式
-      cell.font = { name: STR_字型名稱, size: 12, bold: true, color: { argb: "FF1F4E78" } };
+      cell.font = { name: STR_字型名稱, size: OBJ_字級.欄位名稱, bold: true, color: { argb: STR_字體顏色 } };
       cell.alignment = { horizontal: "center", vertical: "middle" };
       cell.border = 細框線();
     });
-    標題列.height = INT_標題列高;
+    標題列.height = INT_統一列高;
 
     var int起始序號 = intPage * INT_每頁人數 + 1;
     for (var intRow = 0; intRow < INT_每頁每欄人數; intRow++) {
@@ -965,27 +983,27 @@ async function 產生簽到表Excel並下載(arr已排序名單, str檔名) {
         obj右 ? obj右.姓名 : "",
         ""
       ]);
-      資料列.height = INT_資料列高;
+      資料列.height = INT_統一列高;
 
       [1, 2, 3, 4].forEach(function (intColNumber) {
         if (!obj左) { return; }
         var cell = 資料列.getCell(intColNumber);
         cell.alignment = { horizontal: "center", vertical: "middle" };
         cell.border = 細框線();
-        if (intColNumber === 1) { cell.font = { name: STR_字型名稱, size: 12, color: { argb: "FF2E5395" } }; }       // 序號：藍色
-        else if (intColNumber === 2) { cell.font = { name: STR_字型名稱, size: 12, color: { argb: "FFC45911" } }; }  // 組別：橙色
-        else if (intColNumber === 3) { cell.font = { name: STR_字型名稱, size: 12, color: { argb: "FF1F3864" } }; }  // 姓名：深藍色
-        else { cell.font = { name: STR_字型名稱, size: 12 }; } // 簽到欄位（空白，供現場簽名）：仍指定字型，維持一致
+        if (intColNumber === 1) { cell.font = { name: STR_字型名稱, size: OBJ_字級.序號, color: { argb: STR_字體顏色 } }; }
+        else if (intColNumber === 2) { cell.font = { name: STR_字型名稱, size: OBJ_字級.組別, color: { argb: STR_字體顏色 } }; }
+        else if (intColNumber === 3) { cell.font = { name: STR_字型名稱, size: OBJ_字級.姓名, color: { argb: STR_字體顏色 } }; }
+        else { cell.font = { name: STR_字型名稱, size: OBJ_字級.簽到, color: { argb: STR_字體顏色 } }; } // 簽到欄位（空白，供現場簽名）
       });
       [6, 7, 8, 9].forEach(function (intColNumber) {
         if (!obj右) { return; }
         var cell = 資料列.getCell(intColNumber);
         cell.alignment = { horizontal: "center", vertical: "middle" };
         cell.border = 細框線();
-        if (intColNumber === 6) { cell.font = { name: STR_字型名稱, size: 12, color: { argb: "FF2E5395" } }; }
-        else if (intColNumber === 7) { cell.font = { name: STR_字型名稱, size: 12, color: { argb: "FFC45911" } }; }
-        else if (intColNumber === 8) { cell.font = { name: STR_字型名稱, size: 12, color: { argb: "FF1F3864" } }; }
-        else { cell.font = { name: STR_字型名稱, size: 12 }; }
+        if (intColNumber === 6) { cell.font = { name: STR_字型名稱, size: OBJ_字級.序號, color: { argb: STR_字體顏色 } }; }
+        else if (intColNumber === 7) { cell.font = { name: STR_字型名稱, size: OBJ_字級.組別, color: { argb: STR_字體顏色 } }; }
+        else if (intColNumber === 8) { cell.font = { name: STR_字型名稱, size: OBJ_字級.姓名, color: { argb: STR_字體顏色 } }; }
+        else { cell.font = { name: STR_字型名稱, size: OBJ_字級.簽到, color: { argb: STR_字體顏色 } }; }
       });
     }
   }
