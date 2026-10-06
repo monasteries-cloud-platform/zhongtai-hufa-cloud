@@ -6,12 +6,14 @@
 <title>護法會雲端系統 - 報到場次管理</title>
 <!-- SheetJS：供「下載名單」按鈕把某場次出席名單匯出成 .xlsx 使用（2026-09-20 新增） -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- ExcelJS：供「下載簽到表」按鈕產生有邊框／字型顏色／B5頁面設定的
-     .xlsx 使用（2026-10-03 新增）。SheetJS 的免費版本不支援寫入儲存格
-     樣式（框線／字型顏色／頁面設定／頁首頁尾），無法做出簽到表需要的
-     列印版面，改用同樣是開源、但支援完整樣式與頁面設定的 ExcelJS。
-     既有「下載名單」功能仍用原本的 SheetJS，兩套各自獨立、互不影響。 -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<!-- docx：供「下載簽到表」按鈕產生 Word（.docx）格式的簽到表使用
+     （2026-10-06 法師決議：「紙本簽到表，改用WORD格式」，從原本的
+     Excel 改版）。docx 這套開源函式庫可以在瀏覽器端直接組出完整的
+     Word 文件（表格框線／字型／字級／頁面大小／頁首頁尾頁碼），
+     跟先前 ExcelJS 的角色對應，所以把 ExcelJS 換成 docx；既有
+     「下載名單」功能仍用原本的 SheetJS，三套函式庫各自獨立、互不
+     影響。 -->
+<script src="https://cdn.jsdelivr.net/npm/docx@9.8.1/dist/index.umd.cjs"></script>
 <style>
   /*
    * ============================================================
@@ -845,175 +847,228 @@ function 依姓名筆畫排序(arr名單) {
 
 /**
  * ------------------------------------------------------------
- * 函式：細框線
- * 版本：v1.0（2026-10-03，法師訪談決議，簽到表功能新增）
- * 用途：「下載簽到表」共用的儲存格邊框樣式小工具，避免每個儲存格
- *       都要重複寫一樣的四邊框線設定。
- * 回傳：obj，可直接指派給 ExcelJS 儲存格的 border 屬性
+ * 函式：取得簽到表無邊框儲存格設定
+ * 版本：v1.0（2026-10-06，法師決議「紙本簽到表，改用WORD格式」，
+ *       簽到表功能從 Excel 改版為 Word）
+ * 用途：「下載簽到表」左右兩組表格中間的空白間隔欄，不需要框線，
+ *       這裡統一提供一份不畫框線的 docx TableCell 邊框設定，避免
+ *       每個地方都要重複寫一樣的設定。
+ * 回傳：obj，可直接指派給 docx TableCell 的 borders 屬性
  * ------------------------------------------------------------
  */
-function 細框線() {
-  var obj邊框樣式 = { style: "thin", color: { argb: "FFB0B0B0" } };
-  return { top: obj邊框樣式, left: obj邊框樣式, bottom: obj邊框樣式, right: obj邊框樣式 };
+function 取得無框線設定() {
+  var obj無框 = { style: docx.BorderStyle.NONE, size: 0, color: "FFFFFF" };
+  return { top: obj無框, left: obj無框, bottom: obj無框, right: obj無框 };
 }
 
 /**
  * ------------------------------------------------------------
- * 函式：產生簽到表Excel並下載
- * 版本：v3.0（2026-10-04，法師提供精確版面規格，直接採用法師指定的
- *       數值，不再用程式反算：
- *       - 欄寬（字元數）：序號 4.78、組別 13.67、姓名 12.22、
- *         簽到 8、兩組中間空白欄 0.8（左右兩組共 9 欄，比照
- *         範例圖排列）
- *       - 列高：所有列（標題列＋資料列）統一 24
- *       - 頁面邊界：上 0.5、下 0.5、左 0.5、右 0.5（英吋）
- *       - 字型全部使用「微軟正黑體」，顏色統一改為黑色（法師：
- *         「黑色字」，取消先前版本的藍／橙／深藍配色）
- *       - 字級：欄位名稱（標題列）14 級、序號欄 13 級、組別欄
- *         15 級、姓名欄 17 級（法師逐欄指定；「簽到」欄位本身
- *         空白供現場簽名，法師未指定字級，沿用跟序號欄一致的
- *         13 級以維持整體協調）
- *       - 版面既然由法師直接指定精確的欄寬／列高／邊界，就不再
- *         用「縮放至 1 頁寬高」讓 Excel 自動縮放（否則法師算好的
- *         欄寬列高會被縮放比例打亂），改成 scale:100 完全依照
- *         設定的數值列印
- * 版本：v2.0（2026-10-04，法師畫面標註決議：
- *       (1)「1頁50筆資料」：每頁人數從 48 改為 50（每欄 25 人，
- *           左右兩欄共 50 人），不再是 48；
- *       (2)「文字使用微軟正黑體」：所有儲存格字型明確指定
- *           name: "微軟正黑體"，不再依賴瀏覽器/Excel 預設字型；
- *       (3)「下方還有很多空間。要均分在B5上，字放大」：原本每列
- *           高度固定 20pt、字級沿用預設大小，在 B5 (JIS) 可用高度
- *           裡印不滿，下方留白明顯；改成依照實際頁面可印刷高度
- *           （頁高 257mm 減去上下邊界各 0.5in）反算出每列高度
- *           （約 25pt），並把標題列與資料列字級放大（標題 12pt
- *           粗體、資料 12pt），讓表格平均撐滿整張 B5，不再有大片
- *           空白）
- * 版本：v1.0（2026-10-03，法師訪談決議：「產生報到簽到表，B5尺寸」，
- *       訪談確認：資料來源用報到系統的場次出席名單、依姓名筆畫/
- *       注音排序、輸出 Excel 檔案、B5 直放並排兩組「序號/組別/
- *       姓名/簽到」表格，排版比照法師提供的範例圖）
+ * 函式：取得簽到表細框線設定
+ * 版本：v1.0（2026-10-06，法師決議「紙本簽到表，改用WORD格式」）
+ * 用途：「下載簽到表」共用的儲存格邊框樣式小工具，避免每個儲存格
+ *       都要重複寫一樣的細框線設定。
+ * 回傳：obj，可直接指派給 docx TableCell 的 borders 屬性
+ * ------------------------------------------------------------
+ */
+function 取得細框線設定() {
+  var obj細框 = { style: docx.BorderStyle.SINGLE, size: 4, color: "B0B0B0" };
+  return { top: obj細框, left: obj細框, bottom: obj細框, right: obj細框 };
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：建立簽到表儲存格
+ * 版本：v1.0（2026-10-06，法師決議「紙本簽到表，改用WORD格式」）
+ * 用途：「下載簽到表」共用的 docx TableCell 產生工具，把文字內容、
+ *       欄寬、字級、是否粗體組成一個置中對齊、細框線、微軟正黑體、
+ *       黑色字的儲存格，避免每個儲存格都要重複寫一樣的設定。
+ * 參數：
+ *   strText    - 儲存格文字內容
+ *   intWidth   - 欄寬（單位：twips，docx 的長度單位）
+ *   intSize    - 字級（單位：半磅，docx 字級參數的單位，例如
+ *                14 級要傳 28）
+ *   boolBold   - 是否粗體（標題列用）
+ * 回傳：docx.TableCell
+ * ------------------------------------------------------------
+ */
+function 建立簽到表儲存格(strText, intWidth, intSize, boolBold) {
+  return new docx.TableCell({
+    width: { size: intWidth, type: docx.WidthType.DXA },
+    verticalAlign: docx.VerticalAlign.CENTER,
+    borders: 取得細框線設定(),
+    children: [new docx.Paragraph({
+      alignment: docx.AlignmentType.CENTER,
+      children: [new docx.TextRun({
+        text: String(strText),
+        font: { name: "微軟正黑體", eastAsia: "微軟正黑體" },
+        size: intSize,
+        bold: !!boolBold,
+        color: "000000" // 法師指定：黑色字
+      })]
+    })]
+  });
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：建立簽到表間隔儲存格
+ * 版本：v1.0（2026-10-06，法師決議「紙本簽到表，改用WORD格式」）
+ * 用途：左右兩組「序號/組別/姓名/簽到」表格中間的空白間隔欄。
+ * 參數：
+ *   intWidth - 欄寬（單位：twips）
+ * 回傳：docx.TableCell
+ * ------------------------------------------------------------
+ */
+function 建立簽到表間隔儲存格(intWidth) {
+  return new docx.TableCell({
+    width: { size: intWidth, type: docx.WidthType.DXA },
+    borders: 取得無框線設定(),
+    children: [new docx.Paragraph("")]
+  });
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：建立簽到表單頁表格
+ * 版本：v1.0（2026-10-06，法師決議「紙本簽到表，改用WORD格式」）
+ * 用途：組出單一頁面（50 人、左右兩欄各 25 人）的 docx.Table。
+ * 參數：
+ *   arr單頁名單 - 這一頁要顯示的最多 50 筆名單（已依排序切好）
+ *   int起始序號 - 這一頁第一筆資料的流水序號
+ * 回傳：docx.Table
+ * ------------------------------------------------------------
+ */
+function 建立簽到表單頁表格(arr單頁名單, int起始序號) {
+  var INT_每頁每欄人數 = 25;
+  // 法師指定欄寬（原 Excel 版面比例換算成 docx 的 twips 單位，
+  // 1 吋＝1440 twips），加總後貼齊 B5 (JIS) 扣除左右邊界 0.5 吋
+  // 後的可印刷寬度（8879 twips），讓左右兩組表格剛好填滿版面
+  // 寬度、不會因為欄位太窄而被 Word 自動換行
+  var W = { 序號: 616, 組別: 1142, 姓名: 1639, 簽到: 993, 空白: 99 };
+  var OBJ_字級 = { 欄位名稱: 28, 序號: 26, 組別: 30, 姓名: 34, 簽到: 26 }; // 單位：半磅＝法師指定級數的 2 倍（14/13/15/17/13 級）
+  var OBJ_列高 = { value: 480, rule: "exact" }; // 法師指定：行高 24（24 磅＝480 twips）；用 exact 固定列高，行為比照 Excel 版面（內容過長不撐高整頁、也不強制換行）
+
+  var arrRows = [];
+
+  arrRows.push(new docx.TableRow({
+    height: OBJ_列高,
+    children: [
+      建立簽到表儲存格("序號", W.序號, OBJ_字級.欄位名稱, true),
+      建立簽到表儲存格("組別", W.組別, OBJ_字級.欄位名稱, true),
+      建立簽到表儲存格("姓名", W.姓名, OBJ_字級.欄位名稱, true),
+      建立簽到表儲存格("簽到", W.簽到, OBJ_字級.欄位名稱, true),
+      建立簽到表間隔儲存格(W.空白),
+      建立簽到表儲存格("序號", W.序號, OBJ_字級.欄位名稱, true),
+      建立簽到表儲存格("組別", W.組別, OBJ_字級.欄位名稱, true),
+      建立簽到表儲存格("姓名", W.姓名, OBJ_字級.欄位名稱, true),
+      建立簽到表儲存格("簽到", W.簽到, OBJ_字級.欄位名稱, true)
+    ]
+  }));
+
+  for (var intRow = 0; intRow < INT_每頁每欄人數; intRow++) {
+    var obj左 = arr單頁名單[intRow];
+    var obj右 = arr單頁名單[INT_每頁每欄人數 + intRow];
+    var int左序號 = int起始序號 + intRow;
+    var int右序號 = int起始序號 + INT_每頁每欄人數 + intRow;
+
+    arrRows.push(new docx.TableRow({
+      height: OBJ_列高,
+      children: [
+        建立簽到表儲存格(obj左 ? int左序號 : "", W.序號, OBJ_字級.序號),
+        建立簽到表儲存格(obj左 ? obj左.組別 : "", W.組別, OBJ_字級.組別),
+        建立簽到表儲存格(obj左 ? obj左.姓名 : "", W.姓名, OBJ_字級.姓名),
+        建立簽到表儲存格("", W.簽到, OBJ_字級.簽到),
+        建立簽到表間隔儲存格(W.空白),
+        建立簽到表儲存格(obj右 ? int右序號 : "", W.序號, OBJ_字級.序號),
+        建立簽到表儲存格(obj右 ? obj右.組別 : "", W.組別, OBJ_字級.組別),
+        建立簽到表儲存格(obj右 ? obj右.姓名 : "", W.姓名, OBJ_字級.姓名),
+        建立簽到表儲存格("", W.簽到, OBJ_字級.簽到)
+      ]
+    }));
+  }
+
+  return new docx.Table({
+    rows: arrRows,
+    width: { size: 8879, type: docx.WidthType.DXA },
+    layout: docx.TableLayoutType.FIXED,
+    margins: { top: 20, bottom: 20, left: 40, right: 40 } // 縮小儲存格內距，讓行高 24 的設定可以生效（內距太大會把列高撐高）
+  });
+}
+
+/**
+ * ------------------------------------------------------------
+ * 函式：產生簽到表Word並下載
+ * 版本：v1.0（2026-10-06，法師決議：「紙本簽到表，改用WORD格式」，
+ *       把原本輸出 Excel (.xlsx) 的簽到表功能改成輸出 Word
+ *       (.docx)，版面規格（欄寬／列高／邊界／字型／字級／顏色）
+ *       完全比照法師先前提供的精確數值，只是改用 docx 這套函式庫
+ *       在瀏覽器端組出 Word 文件：
+ *       - 欄寬：序號 616、組別 1142、姓名 1639、簽到 993、間隔
+ *         99（單位 twips，依法師原本的 Excel 欄寬比例換算，並
+ *         配合 Word 表格「文字一定要換行」的特性做了必要的加寬，
+ *         避免文字被切成兩行）
+ *       - 列高：統一 24 級（480 twips），用「exact」固定列高
+ *       - 頁面邊界：上下左右皆 0.5 吋
+ *       - 字型：微軟正黑體、黑色字
+ *       - 字級：欄位名稱 14、序號 13、組別 15、姓名 17、簽到 13
+ *         （簽到欄位未特別指定，沿用序號欄的 13 級）
+ *       - 紙張：B5（182×257mm，Word 內建紙張清單最接近 ISO B5 的
+ *         選項，跟先前 Excel 版面使用同一個尺寸）
+ *       - 頁尾：用 docx 的 PageNumber 欄位代碼顯示「第X頁，共Y頁」，
+ *         Word 開啟時會自動算出正確的頁碼／總頁數，不用自己寫死
  * 用途：把已經排序好的出席名單，每 50 人一頁（每頁分左右兩欄，
- *       每欄 25 人），用 ExcelJS 產生一份多工作表的 .xlsx 檔案
- *       （一個工作表＝一個實際列印頁面），每個工作表都設定好 B5
- *       直向、縮放至 1 頁寬高的頁面設定，並用 Excel 內建的頁尾
- *       欄位代碼「&P（目前頁）/&N（總頁數）」顯示「第X頁，共Y頁」
- *       （列印「整本活頁簿」時，Excel 會自動依序編號、算出正確的
- *       總頁數，比自己寫死頁碼更不容易出錯；只印單一工作表時，
- *       &N 只會算這一頁，所以務必提醒資料組用「列印整本活頁簿」）。
- *       序號是這份簽到表重新流水編號（1、2、3...依排序後順序），
- *       不是原始出席名單裡的序號，方便報到者現場核對。
- *       ExcelJS 支援完整的儲存格樣式（框線／字型顏色／字型名稱）
- *       與頁面設定（紙張大小／頁首頁尾），這是改用 ExcelJS 而非
- *       既有「下載名單」用的 SheetJS 的原因（SheetJS 免費版不支援
- *       寫入樣式）。
- *       B5 說明：Excel 內建紙張大小沒有獨立的 ISO B5（176×250mm）
- *       選項，這裡使用最接近的「B5 (JIS)」（182×257mm，相差僅幾
- *       毫米），多數印表機的 B5 紙匣用這個設定列印不會有實際問題；
- *       若印表機支援自訂紙張，資料組也可以在列印時自行調整。
+ *       每欄 25 人），用 docx 產生一份多分節（section）的 .docx
+ *       檔案（一個 section＝一個實際列印頁面）。序號是這份簽到表
+ *       重新流水編號（1、2、3...依排序後順序），不是原始出席
+ *       名單裡的序號，方便報到者現場核對。
  * 參數：
  *   arr已排序名單 - 依姓名筆畫排序過的出席名單陣列（元素需含
  *                   姓名／組別）
- *   str檔名       - 下載的檔案名稱（不含副檔名，會自動加上 .xlsx）
+ *   str檔名       - 下載的檔案名稱（不含副檔名，會自動加上 .docx）
  * 回傳：Promise（無回傳值，直接觸發瀏覽器下載）
  * ------------------------------------------------------------
  */
-async function 產生簽到表Excel並下載(arr已排序名單, str檔名) {
+async function 產生簽到表Word並下載(arr已排序名單, str檔名) {
   var INT_每頁人數 = 50;
-  var INT_每頁每欄人數 = 25; // 每頁分兩欄，每欄 25 人（2026-10-04 法師標註：1頁50筆資料）
-  var STR_字型名稱 = "微軟正黑體"; // 法師指定：文字使用微軟正黑體
-  var STR_字體顏色 = "FF000000"; // 法師指定：黑色字
-  var INT_統一列高 = 24; // 法師指定：行高 24（標題列與資料列統一）
-  var OBJ_字級 = { 欄位名稱: 14, 序號: 13, 組別: 15, 姓名: 17, 簽到: 13 }; // 法師逐欄指定字級；「簽到」欄未特別指定，沿用序號欄的 13 級
 
-  var 活頁簿 = new ExcelJS.Workbook();
-  var int總頁數 = Math.ceil(arr已排序名單.length / INT_每頁人數);
-
-  for (var intPage = 0; intPage < int總頁數; intPage++) {
-    var 工作表 = 活頁簿.addWorksheet("第" + (intPage + 1) + "頁");
-
-    // 法師指定欄寬（字元數）：序號 4.78、組別 13.67、姓名 12.22、
-    // 簽到 8、兩組中間空白欄 0.8
-    工作表.columns = [
-      { width: 4.78 }, { width: 13.67 }, { width: 12.22 }, { width: 8 },
-      { width: 0.8 },
-      { width: 4.78 }, { width: 13.67 }, { width: 12.22 }, { width: 8 }
-    ];
-    工作表.pageSetup = {
-      paperSize: 13, // B5 (JIS) 182x257mm，Excel 內建紙張清單裡最接近 ISO B5 的選項
-      orientation: "portrait",
-      scale: 100, // 法師已直接指定精確欄寬/列高/邊界，不再用自動縮放，避免打亂法師算好的版面
-      horizontalCentered: true,
-      margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } // 法師指定：上下左右邊界皆 0.5
-    };
-    工作表.headerFooter = {
-      oddFooter: "&C第 &P 頁，共 &N 頁",
-      evenFooter: "&C第 &P 頁，共 &N 頁"
-    };
-
-    var 標題列 = 工作表.addRow(["序號", "組別", "姓名", "簽到", "", "序號", "組別", "姓名", "簽到"]);
-    標題列.eachCell(function (cell, intColNumber) {
-      if (intColNumber === 5) { return; } // 第 5 欄是左右兩張表中間的間隔欄，不設定樣式
-      cell.font = { name: STR_字型名稱, size: OBJ_字級.欄位名稱, bold: true, color: { argb: STR_字體顏色 } };
-      cell.alignment = { horizontal: "center", vertical: "middle" };
-      cell.border = 細框線();
-    });
-    標題列.height = INT_統一列高;
-
-    var int起始序號 = intPage * INT_每頁人數 + 1;
-    for (var intRow = 0; intRow < INT_每頁每欄人數; intRow++) {
-      var int左序號 = int起始序號 + intRow;
-      var int右序號 = int起始序號 + INT_每頁每欄人數 + intRow;
-      var obj左 = arr已排序名單[int左序號 - 1];
-      var obj右 = arr已排序名單[int右序號 - 1];
-
-      // 這個場次人數不是 50 的倍數時，最後一頁會有左欄或右欄沒有
-      // 資料的情況，沒有資料的半邊維持完全空白（不畫框線），讓
-      // 現場人員一看就知道名單到哪裡結束
-      if (!obj左 && !obj右) { continue; }
-
-      var 資料列 = 工作表.addRow([
-        obj左 ? int左序號 : "",
-        obj左 ? obj左.組別 : "",
-        obj左 ? obj左.姓名 : "",
-        "",
-        "",
-        obj右 ? int右序號 : "",
-        obj右 ? obj右.組別 : "",
-        obj右 ? obj右.姓名 : "",
-        ""
-      ]);
-      資料列.height = INT_統一列高;
-
-      [1, 2, 3, 4].forEach(function (intColNumber) {
-        if (!obj左) { return; }
-        var cell = 資料列.getCell(intColNumber);
-        cell.alignment = { horizontal: "center", vertical: "middle" };
-        cell.border = 細框線();
-        if (intColNumber === 1) { cell.font = { name: STR_字型名稱, size: OBJ_字級.序號, color: { argb: STR_字體顏色 } }; }
-        else if (intColNumber === 2) { cell.font = { name: STR_字型名稱, size: OBJ_字級.組別, color: { argb: STR_字體顏色 } }; }
-        else if (intColNumber === 3) { cell.font = { name: STR_字型名稱, size: OBJ_字級.姓名, color: { argb: STR_字體顏色 } }; }
-        else { cell.font = { name: STR_字型名稱, size: OBJ_字級.簽到, color: { argb: STR_字體顏色 } }; } // 簽到欄位（空白，供現場簽名）
-      });
-      [6, 7, 8, 9].forEach(function (intColNumber) {
-        if (!obj右) { return; }
-        var cell = 資料列.getCell(intColNumber);
-        cell.alignment = { horizontal: "center", vertical: "middle" };
-        cell.border = 細框線();
-        if (intColNumber === 6) { cell.font = { name: STR_字型名稱, size: OBJ_字級.序號, color: { argb: STR_字體顏色 } }; }
-        else if (intColNumber === 7) { cell.font = { name: STR_字型名稱, size: OBJ_字級.組別, color: { argb: STR_字體顏色 } }; }
-        else if (intColNumber === 8) { cell.font = { name: STR_字型名稱, size: OBJ_字級.姓名, color: { argb: STR_字體顏色 } }; }
-        else { cell.font = { name: STR_字型名稱, size: OBJ_字級.簽到, color: { argb: STR_字體顏色 } }; }
-      });
+  var objPageProps = {
+    page: {
+      size: { width: 10319, height: 14571 }, // B5 (JIS) 182x257mm 換算成 twips（1mm≈56.69 twips）
+      margin: { top: 720, bottom: 720, left: 720, right: 720, header: 288, footer: 288 } // 法師指定：上下左右邊界皆 0.5 吋（720 twips）
     }
+  };
+
+  var objFooter = new docx.Footer({
+    children: [new docx.Paragraph({
+      alignment: docx.AlignmentType.CENTER,
+      children: [
+        new docx.TextRun({ text: "第 ", font: "微軟正黑體", size: 20 }),
+        new docx.TextRun({ children: [docx.PageNumber.CURRENT], font: "微軟正黑體", size: 20 }),
+        new docx.TextRun({ text: " 頁，共 ", font: "微軟正黑體", size: 20 }),
+        new docx.TextRun({ children: [docx.PageNumber.TOTAL_PAGES], font: "微軟正黑體", size: 20 }),
+        new docx.TextRun({ text: " 頁", font: "微軟正黑體", size: 20 })
+      ]
+    })]
+  });
+
+  var int總頁數 = Math.ceil(arr已排序名單.length / INT_每頁人數);
+  var arrSections = [];
+  for (var intPage = 0; intPage < int總頁數; intPage++) {
+    var arr單頁名單 = arr已排序名單.slice(intPage * INT_每頁人數, intPage * INT_每頁人數 + INT_每頁人數);
+    var int起始序號 = intPage * INT_每頁人數 + 1;
+    arrSections.push({
+      properties: intPage === 0 ? objPageProps : Object.assign({ type: docx.SectionType.NEXT_PAGE }, objPageProps),
+      footers: { default: objFooter },
+      children: [建立簽到表單頁表格(arr單頁名單, int起始序號)]
+    });
   }
 
-  var arrBuffer = await 活頁簿.xlsx.writeBuffer();
-  var blob = new Blob([arrBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  var 文件 = new docx.Document({ sections: arrSections });
+  var blob = await docx.Packer.toBlob(文件);
   var strURL = URL.createObjectURL(blob);
   var elA = document.createElement("a");
   elA.href = strURL;
-  elA.download = str檔名 + ".xlsx";
+  elA.download = str檔名 + ".docx";
   document.body.appendChild(elA);
   elA.click();
   document.body.removeChild(elA);
@@ -1023,11 +1078,14 @@ async function 產生簽到表Excel並下載(arr已排序名單, str檔名) {
 /**
  * ------------------------------------------------------------
  * 函式：處理下載簽到表按鈕點擊
+ * 版本：v2.0（2026-10-06，法師決議：「紙本簽到表，改用WORD格式」，
+ *       改成檢查 docx 元件是否載入成功，並呼叫改版後的
+ *       「產生簽到表Word並下載」）
  * 版本：v1.0（2026-10-03，法師訪談決議，簽到表功能新增）
  * 用途：呼叫既有的「查詢場次出席名單」API（跟「下載名單」共用同一
  *       支 API，不需要新增後端功能），取得該場次完整出席名單後，
- *       依姓名筆畫排序，再用「產生簽到表Excel並下載」輸出成可直接
- *       列印的 B5 簽到表 .xlsx 檔案。
+ *       依姓名筆畫排序，再用「產生簽到表Word並下載」輸出成可直接
+ *       列印的 B5 簽到表 .docx 檔案。
  * 參數：
  *   str場次代碼 - 要下載簽到表的場次代碼
  *   str場次名稱 - 該場次名稱（用於組檔名，可能為空）
@@ -1040,7 +1098,7 @@ async function 處理下載簽到表按鈕點擊(str場次代碼, str場次名�
     return;
   }
 
-  if (typeof ExcelJS === "undefined") {
+  if (typeof docx === "undefined") {
     window.alert("匯出簽到表的元件載入失敗，請確認網路連線正常後重新整理頁面再試一次。");
     return;
   }
@@ -1064,7 +1122,7 @@ async function 處理下載簽到表按鈕點擊(str場次代碼, str場次名�
 
     const arr已排序名單 = 依姓名筆畫排序(objResult.出席名單);
     const str檔名 = str場次代碼 + (str場次名稱 ? "_" + str場次名稱 : "") + "_簽到表";
-    await 產生簽到表Excel並下載(arr已排序名單, str檔名);
+    await 產生簽到表Word並下載(arr已排序名單, str檔名);
   } catch (錯誤) {
     console.error("下載簽到表時發生未預期錯誤：", 錯誤);
     window.alert("下載簽到表時發生未預期錯誤，請稍後再試或聯絡工程人員。");
